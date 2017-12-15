@@ -10,31 +10,29 @@
 </head>
 <body>
 <div class="container">
-<table class=" table table-bordered">
-    <h>列表页面</h>
-<thead>
+    <h1>列表页面</h1>
+    {% if show_add_btn %}
+        <a class="btn btn-primary" href="{{ add_url }}">添加</a>
+    {% endif %}
 
-  <tr>
-{% for foo in head_list %}
-    <td>{{ foo }}</td>
-{% endfor %}
-  </tr>
-
-</thead>
-<tbody>
-    {% for foo in data_list %}
+    <table class=" table table-bordered">
+        <thead>
         <tr>
-       {% for fo in  foo %}
-           <td>{{ fo }}</td>
-
-       {% endfor %}
-
+            {% for foo in head_list %}
+                <td>{{ foo }}</td>
+            {% endfor %}
         </tr>
-
-    {% endfor %}
-</tbody>
-
-</table>
+        </thead>
+        <tbody>
+        {% for foo in data_list %}
+            <tr>
+                {% for fo in  foo %}
+                    <td>{{ fo }}</td>
+                {% endfor %}
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
 </div>
 </body>
 </html>

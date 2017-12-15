@@ -1,22 +1,40 @@
-from app01 import  models
+from app01 import models
 from stark.service import v1
-from  django.utils.safestring import mark_safe
+from django.forms import ModelForm
+
 print(123)
 
 
+class UserInfoModelForm(ModelForm):
+    class Meta:
+        model = models.UserInfo
+        fields = '__all__'
+        error_messages = {
+            'name': {
+                'required': '用户名不能为空',
+            }
+        }
 
 
 class UserInfoConfig(v1.StarkConfig):
-    def checkbox(self,obj=None,is_header=False):
-        if is_header:
-            return '选择'
-        return mark_safe("<input type='checkbox' name='pk' value='%s'>"%(obj.id,))
-    def edit(self,obj=None,is_header=False):
-        if is_header:
-            return '编辑'
+    list_display = ['id', 'name']
+    model_form_class = UserInfoModelForm
 
-        return  mark_safe("<a href='%s/change'>编辑</a>"%(obj.id,))
-    list_display=[checkbox,'id','name','usertype',edit]
-v1.site.register(models.UserType)
-v1.site.register(models.UserInfo,UserInfoConfig)
-v1.site.register(models.Role)
+class UserTypeConfig(v1.StarkConfig):
+    list_display = ['id', 'name',]
+
+v1.site.register(models.UserType,UserTypeConfig)
+
+v1.site.register(models.UserInfo, UserInfoConfig)
+
+
+class RoleConfig(v1.StarkConfig):
+    list_display = ['id', 'name']
+
+
+v1.site.register(models.Role, RoleConfig)
+class HostConfig(v1.StarkConfig):
+    list_display = ['id', 'hostname','ip','port']
+
+v1.site.register(models.Host, HostConfig)
+
