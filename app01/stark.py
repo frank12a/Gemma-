@@ -3,8 +3,6 @@ from stark.service import v1
 from django.forms import ModelForm
 from django.shortcuts import render,redirect
 
-print(123)
-
 
 class UserInfoModelForm(ModelForm):
     class Meta:
@@ -17,24 +15,26 @@ class UserInfoModelForm(ModelForm):
         }
 
 
-
 class UserInfoConfig(v1.StarkConfig):
-    list_display = ['id', 'name']
+    list_display = ['id', 'name','usertype']#页面显示的字段
     list_filter = ['name', 'usertype']
-    model_form_class = UserInfoModelForm
-    search_fields = ['name__contains', 'id__contains']
+    model_form_class = UserInfoModelForm#把自定义的ModelForm作为传过去
+    search_fields = ['name__contains', 'id__contains','usertype__contains']#这个是查询的字段是模糊查询
 
-    # def add_views(self, request, *args, **kwargs):
-    #     user_list=[]
-    #     for  i in range(100):
-    #         userinfo_list=models.UserInfo(name='jack'+str(i),usertype_id='4')
-    #         user_list.append(userinfo_list)
-    #     models.UserInfo.objects.bulk_create(user_list)
-    #     return redirect(self.get_list_url())
+    show_actions = True#这是是否显示actions
+    def multi_del(self,request):#这是自己定义的函数和actions相关
+        pk_list=request.POST.getlist('pk')
+        self.model_class.objects.filter(id__in=pk_list).delete()
+        return  redirect("http://www.baidu.com")
+    multi_del.short_desc='批量删除'#这是函数的名字
+    actions=[multi_del]#这里存放actions的函数
+
+
+
 
 
 class UserTypeConfig(v1.StarkConfig):
-    list_display = ['id', 'name',]
+    list_display = ['id', 'name']
 
 
 v1.site.register(models.UserType,UserTypeConfig)

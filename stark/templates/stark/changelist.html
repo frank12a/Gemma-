@@ -11,30 +11,34 @@
 <body>
 <div class="container">
     <h1>列表页面</h1>
-<div class="form-group">
-    <form action="" method="get">
-    <input name="q" placeholder="搜素条件" class="form-control" type="text" style="display:inline-block;width:200px;">
-    <button class="btn btn-primary"><span class="">搜索</span></button>
-        </form>
-</div>
-
-{#    {% if  cl.list_filter %}#}
-{#        {% for data_list in c1.get_list_filter %}#}
-{#            <div>#}
-{#                <a>全部：</a>#}
-{#                {% for obj in data_list %}#}
-{#                    <a href="{{ obj.pk }}">{{ obj }}</a>#}
-{##}
-{#                {% endfor %}#}
-{##}
-{#            </div>#}
-{#        {% endfor %}#}
-{##}
-{#    {% endif %}#}
-
+    {% if cl.show_search_form %}
+        <div class="form-group">
+            <form action="" method="get">
+                <input name="{{ cl.config.search_key }}" value="{{ cl.search_form_val }}" placeholder="搜素条件"
+                       class="form-control" type="text"
+                       style="display:inline-block;width:200px;">
+                <button class="btn btn-primary"><span class="">搜索</span></button>
+            </form>
+        </div>
+    {% endif %}
     {% if cl.show_add_btn %}
         <a class="btn btn-primary" href="{{ cl.add_url }}">添加</a>
     {% endif %}
+    {% if cl.show_actions %}
+        <form action="" method="post">
+        {% csrf_token %}
+        <div cladd="form-group">
+            <select class="form-control" name='list_actions' style="display:inline-block;width:200px;">
+                {% for item  in cl.modify_actions %}
+                    <option value="{{ item.name }}">{{ item.text }}</option>
+                {% endfor %}
+            </select>
+            <button class="btn btn-primary"><span class="">执行</span></button>
+
+        </div>
+
+    {% endif %}
+
 
     <table class=" table table-bordered">
         <thead>
@@ -47,7 +51,7 @@
         <tbody>
         {% for foo in cl.body_list %}
             <tr>
-{#            {{ foo }}#}
+
                 {% for fo in  foo %}
                     <td>{{ fo }}</td>
                 {% endfor %}
@@ -55,13 +59,14 @@
         {% endfor %}
         </tbody>
     </table>
+    </form>
 
-<nav aria-label="Page navigation">
-  <ul class="pagination">
-    {{ cl.page_obj.page_html|safe }}
+    <nav aria-label="Page navigation">
+        <ul class="pagination">
+            {{ cl.page_obj.page_html|safe }}
 
-  </ul>
-</nav>
+        </ul>
+    </nav>
 </div>
 </body>
 </html>

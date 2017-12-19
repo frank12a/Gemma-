@@ -3,41 +3,53 @@ from django.shortcuts import HttpResponse, render, redirect
 from django.conf.urls import url
 from django.utils.safestring import mark_safe
 from django.urls import reverse
-# from django.core.paginator import Paginator
-from utils.pager import Pagination
+
 from django.http import QueryDict
 from django.db.models import Q
 
 
 class ChangeList(object):
     def __init__(self, config, queryset):
-        self.config = config
-        self.list_display = config.get_list_display()
-        self.model_class = config.model_class
-        self.request = config.request
-        self._query_param_key = '_listfilter'
+        self.config = config       #这是StarkConfig传过来的self
+        self.list_display = config.get_list_display()#这是显示的字段
+        self.model_class = config.model_class  #这是我们要处理的类
+        self.request = config.request #这是传过来self的request
+        self._query_param_key = '_listfilter' #这是为了返回页面时定义的一个名字
 
-        def get_show_add_btn(self):
-            return self.show_add_btn
+
+
+
+        self.show_add_btn=config.get_show_add_btn()#这是是否要显示增加按钮
+        self.show_search_form=config.get_show_search_form()#这是是否要显示搜索按钮
+        self.show_add_btn=config.get_show_add_btn()#这是是否要显示增加按钮
+        self.add_url=config.get_add_url()#这是增加按钮的url
+        self.search_form_val=config.request.GET.get(config.search_key,'')#这是查询时显示查询的内容
+        self.show_actions=config.get_show_actions()#这是是否显示actions
+        self.actions=config.get_actions()#这是actions的函数
 
         from utils.pager import Pagination
-        current_page = self.request.GET.get('page', 1)
-        total_count = queryset.count()
-        page_obj = Pagination(current_page, total_count, self.request.path_info, self.request.GET, )
-        self.page_obj = page_obj
-        self.data_list = queryset[page_obj.start:page_obj.end]
-
-    def get_change_url(self, nid):
+        current_page = self.request.GET.get('page', 1)#查询现在的页面
+        total_count = queryset.count()#查询所有的记录数
+        page_obj = Pagination(current_page, total_count, self.request.path_info, self.request.GET, )#这是关于页面处理的插件
+        self.page_obj = page_obj#这是关于页面的所有函数
+        self.data_list = queryset[page_obj.start:page_obj.end] #关于页面的起止页
+    def modify_actions(self):#这是action里面处理的函数
+        result=[]
+        for func in self.actions:
+            temp={'name':func.__name__,'text':func.short_desc}
+            result.append(temp)
+        return result
+    def get_change_url(self, nid):#这是编辑页面的反向解析
         name = '%s/%s/change_list' % (self.model_class._meta.app_label, self.model_class._meta.model_name,)
         change_url = reverse(name, args=(nid,))
         return change_url
 
-    def get_delete_url(self, nid):
+    def get_delete_url(self, nid):#这是删除页面的反向解析
         name = '%s/%s/delete_list' % (self.model_class._meta.app_label, self.model_class._meta.model_name,)
         delete_url = reverse(name, args=(nid,))
         return delete_url
 
-    def head_list(self):
+    def head_list(self):#这是处理头部数据的
         result = []
         for field_name in self.list_display:
             if isinstance(field_name, str):
@@ -59,10 +71,9 @@ class ChangeList(object):
                     val = field_name(self, row)
                 temp.append(val)
             new_data_list.append(temp)
-        print('new_data_list', new_data_list)
         return new_data_list
 
-    def get_add_url(self):
+    def get_add_url(self):#这是增加函数的反向解析
         name = '%s/%s/add_list' % (self.model_class._meta.app_label, self.model_class._meta.model_name,)
         add_url = reverse(name)
         return add_url
@@ -72,6 +83,12 @@ class ChangeList(object):
 
 
 class StarkConfig(object):
+    def __init__(self, model_class, site):
+        self.model_class = model_class
+        self.site = site
+        self.request = None
+        self._query_param_key = '_listfilter'#这是
+        self.search_key = 'q'
     def checkbox(self, obj=None, is_header=False):
         if is_header:
             return '选择'
@@ -98,6 +115,48 @@ class StarkConfig(object):
         return mark_safe("<a href='%s'>删除</a>" % (self.get_delete_url(obj.id)))
 
     list_display = []
+    #actions定制
+    #是否显示在前端显示
+    show_actions=True
+    def get_show_actions(self):
+        return  self.show_actions
+    actions=[]#默认actions是空的
+    def get_actions(self):#这里面放的是actions的函数
+        result=[]
+        if self.actions:
+            result.extend(self.actions)
+        print('result',result)
+        return result
+
+
+    def get_show_add_btn(self):
+        return self.show_add_btn
+    #是否要显示搜索按钮
+    show_search_form=True
+    def get_show_search_form(self):
+        return self.show_search_form
+
+    #这是删除url的反向解析
+    def get_delete_url(self, nid):
+        name = '%s/%s/delete_list' % (self.model_class._meta.app_label, self.model_class._meta.model_name,)
+        delete_url = reverse(name, args=(nid,))
+        return delete_url
+
+    def get_add_url(self):
+        name = '%s/%s/add_list' % (self.model_class._meta.app_label, self.model_class._meta.model_name,)
+        add_url = reverse(name)
+        return add_url
+    def get_search_form_condition(self):
+        if self.request.method == 'GET':
+            print('数据', self.request.GET.get(self.search_key))
+            key_word = self.request.GET.get(self.search_key)
+            search_fields = self.get_search_fields()
+            condition = Q()
+            condition.connector = 'or'
+            if key_word and self. get_show_search_form:
+                for field_name in search_fields:
+                    condition.children.append((field_name, key_word))
+            return  condition
 
     # 编辑页面的路由系统的反射
     # def get_change_url(self, nid):
@@ -115,10 +174,10 @@ class StarkConfig(object):
     #     delete_url = reverse(name, args=(nid,))
     #     return delete_url
     # 展示页面的路由系统的反射
-    # def get_list_url(self):
-    #     name = '%s/%s/show_lists' % (self.model_class._meta.app_label, self.model_class._meta.model_name,)
-    #     list_url = reverse(name)
-    #     return list_url
+    def get_list_url(self):
+        name = '%s/%s/show_lists' % (self.model_class._meta.app_label, self.model_class._meta.model_name,)
+        list_url = reverse(name)
+        return list_url
     # 需要页面显示的字段
     def get_list_display(self):
         data = []
@@ -137,24 +196,17 @@ class StarkConfig(object):
         return self.show_add_btn
 
     search_fields = []
-
     def get_search_fields(self):
         result = []
         if self.search_fields:
             result.extend(self.search_fields)
         return result
 
-    def __init__(self, model_class, site):
-        self.model_class = model_class
-        self.site = site
-        self.request = None
-        self._query_param_key = '_listfilter'
 
     def wrap(self, view_func):
         def inner(request, *args, **kwargs):
             self.request = request
             return view_func(request, *args, **kwargs)
-
         return inner
 
     # 生成URL
@@ -174,16 +226,17 @@ class StarkConfig(object):
 
     # 展示页面
     def changelist(self, request, *args, **kwargs):
-        if request.method == 'GET':
-            print('数据', request.GET.get('q'))
-            key_word = request.GET.get('q')
-            search_fields = self.get_search_fields()
-            q1 = Q()
-            q1.connector = 'or'
-            if key_word:
-                for field_name in search_fields:
-                    q1.children.append((field_name, key_word))
-            queryset = self.model_class.objects.filter(q1)
+            if request.method=="POST" and self.get_show_actions():
+                   func_name_str=request.POST.get("list_actions")
+                   print('PK',request.POST.get('pk'))
+                   actions_func=getattr(self,func_name_str)
+                   ret=actions_func(request)
+                   if ret:
+                       return  ret
+
+
+
+            queryset = self.model_class.objects.filter(self.get_search_form_condition())
             cl = ChangeList(self, queryset)
             print(cl.body_list)
             return render(request, "stark/changelist.html", {'cl': cl})
@@ -212,9 +265,6 @@ class StarkConfig(object):
             form = model_form_class(request.POST)
             if form.is_valid():
                 form.save()
-                # list_query_str = request.GET.get(self._query_param_key)
-                # list_url = '%s?%s' % (self.get_list_url(), list_query_str)
-                # return redirect(list_url)
                 return redirect(self.get_list_url())
             return render(request, 'stark/add_view.html', {'form': form})
 
@@ -240,8 +290,6 @@ class StarkConfig(object):
         list_query_str = request.GET.get(self._query_param_key)
         list_url = '%s?%s' % (self.get_list_url(), list_query_str)
         return redirect(list_url)
-        # return redirect(self.get_list_url())
-
     @property
     def urls(self):
         return self.get_urls()
