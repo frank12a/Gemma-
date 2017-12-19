@@ -1,0 +1,249 @@
+自定义增删改查组件的流程：  在v1表里面默认list_display是空列表
+我们先在定义的插件里
+     def ready(self):
+        from django.utils.module_loading import autodiscover_modules
+        autodiscover_modules('stark')（这个stark的名字是和引用的app里面stark同名）
+   我们先来说下admin启用时的流程：
+   首先，是在admin里面把类注册在里面，
+   接在在url里面调用之前的的路由系统：
+   所以，我们在stark文件下面创建一个service文件夹，下面创建一个文件，里面写两个类：
+   一个是class StarkSite(object)；class StarkConfig(object)
+   接着实例化
+   site = StarkSite()
+   接着我们要在app01下面建一个文件用来注册类的和(admin.py类似）
+        from app01 import models
+        from stark.service import v1
+        from django.forms import ModelForm
+        from django.shortcuts import render,redirect
+
+        print(123)
+
+
+        class UserInfoModelForm(ModelForm):
+            class Meta:
+                model = models.UserInfo
+                fields = '__all__'
+                error_messages = {
+                    'name': {
+                        'required': '用户名不能为空',
+                    }
+                }
+
+
+        class UserInfoConfig(v1.StarkConfig):
+            list_display = ['id', 'name']
+            model_form_class = UserInfoModelForm
+
+        class UserTypeConfig(v1.StarkConfig):
+            list_display = ['id', 'name',]
+
+        v1.site.register(models.UserType,UserTypeConfig)
+
+        v1.site.register(models.UserInfo, UserInfoConfig)
+
+
+        class RoleConfig(v1.StarkConfig):
+            list_display = ['id', 'name']
+
+
+        v1.site.register(models.Role, RoleConfig)
+        class HostModelForm(ModelForm):
+            class Meta:
+                model=models.Host
+                fields=['id','hostname','ip','port']
+                error_messages={
+                    "hostname":{
+                        'required':'主机名不能为空',
+                    },
+                    'ip':{
+                        'required':'ip地址不能为空',
+                        'invalid':'格式错误',
+                    }
+                }
+        class HostConfig(v1.StarkConfig):
+            def ip_port(self,obj=None,is_header=False):
+                if is_header:
+                    return  '自定义列'
+                return '%s:%s'%(obj.ip,obj.port,)
+
+
+            list_display = ['id', 'hostname','ip','port',ip_port]
+            model_form_class = HostModelForm
+            def delete_views(self, request, nid, *args, **kwargs):
+                if request.method=="GET":
+                    return  render(request,'stark/my_delete.html')
+                else:
+                    self.model_class.objects.filter(pk=nid).delete()
+                    return redirect(self.get_list_url())
+
+
+        v1.site.register(models.Host, HostConfig)
+
+
+
+
+
+
+
+
+
+
+在昨天工作的基础上今天的工作是：
+我们是默认给每个表加上样式(选择（用checkbox）、编辑（用的是跳转）和删除按钮（用的是跳转）)用list_display
+首先是做url的反向解析做到删除按钮和编辑按钮都可以自动识别是哪个表
+首先是对选择、编辑、删除按钮放在默认的表里(V1),我们首先判断这几个按钮是表头还是表格里的数据。
+通过 if is_header:
+            return '选择'
+来判断如果不是我们就执行下面的代码
+  return mark_safe("<input type='checkbox' name='pk' value='%s'>" % (obj.id,))（这个是选择的插件）
+  或者
+  return mark_safe("<a href='%s'>编辑</a>" % (self.get_change_url(obj.id)))（这个是编辑或者删除）
+ 我们要定义一下函数来对应下路由系统的反射。
+    def get_change_url(self, nid):
+        name = '%s/%s/change_list' % (self.model_class._meta.app_label, self.model_class._meta.model_name,)
+        change_url = reverse(name, args=(nid,))
+        return change_url
+ 我们希望用这个插件的人自己定义需要显示哪些字段：我们在这个基础上加上选择、删除、编辑等三个插件。
+ 我们定义一个函数来接收
+
+ def get_list_display():
+      data=[]
+      if self.list_display:
+          data.extend(list_display)
+          data.append(StarkConfig.edit)
+          data.append(StarkConfig.delete)
+          data.insert(0,StarkConfig.checkbox)
+      return data
+ 今天我们在展示页面上添加了是否显示添加按钮等功能：
+         # 添加按钮
+        show_add_btn = True
+
+        # 显示按钮
+        def get_show_add_btn(self):
+            return self.show_add_btn
+        我们在返回函数上添加一个是添加按钮的跳转路径和判断它是否显示的条件
+        我们在展示页面加上添加按钮和判断条件
+ 我们现在要对添加、删除、编辑按钮做事件就是增删改查：
+ 注：添加、删除、编辑、我们通过用ModelForm来做
+ 我们默认  model_form_class = None 是为了插件使用者可以自己定义
+ 我们定义一个函数来生成ModelForm(两种方法，普通版和type版)
+      def get_model_form_class(self):
+            if self.model_form_class:
+                return self.model_form_class
+            from django.forms import ModelForm
+            # class TestModelForm(ModelForm):
+            #     class Meta:
+            #         model = self.model_class
+            #         fields = '__all__'
+            meta = type('meta', (object,), {'model': self.model_class, 'fields': '__all__'})
+            TestModelForm = type("TestModelForm", (ModelForm,), {"Meta": meta})
+            return TestModelForm
+
+ (a)现对添加按钮做事件
+      我们添加按钮通过用ModelForm来生成页面和保存
+      这个就是ModelForm的使用：
+      我们先判断是哪种方式传参：
+          如果是get我们先实例化一个Form传到前端
+          如果是返回函数我们要先接收，在判断它是否符合我们的定义格式如果符合我们就保存，在跳转到这个表格的展示页面
+           如果没有通过验证那就再返回这个页面包含着错误信息
+           代码如下：
+               def add_views(self, request, *args, **kwargs):
+                    model_form_class = self.get_model_form_class()
+                    if request.method == "GET":
+                        form = model_form_class()
+                        return render(request, 'stark/add_view.html', {'form': form})
+                    else:
+                        form = model_form_class(request.POST)
+                        if form.is_valid():
+                            form.save()
+                            return redirect(self.get_list_url())
+                        return render(request, 'stark/add_view.html', {'form': form})
+
+
+ (b)编辑按钮的使用
+    首先，我们判断是哪种形式的数据传入：
+    如果是：GET:我们编辑时需要传入一个id，我们需要在另一个页面里展示你选中的那一行数据，需要ModelForm初始化数据
+    如果是:POST:我们需要传入的数据和初始化的那个对象，接着我们在进行格式判断，如果通过就直接保存，然后跳转到展示页面；如果没有通过我们就直接让他返回错误信息
+        def change_views(self, request, nid, *args, **kwargs):
+            obj = self.model_class.objects.filter(pk=nid).first()
+            if not obj:
+                return redirect(self.get_list_url())
+            model_form_class = self.get_model_form_class()
+            if request.method == "GET":
+                form = model_form_class(instance=obj)
+                return render(request, "stark/change_view.html", {"form": form})
+            else:
+                form = model_form_class(instance=obj, data=request.POST)
+                if form.is_valid():
+                    form.save()
+                    return redirect(self.get_list_url())
+                return render(request, "stark/change_view.html", {"form": form})
+ (c)删除按钮的事件：
+    我们需要选中的那一行的数据的id，然后到数据库查找直接删除掉，然后返回到展示页面
+     def delete_views(self, request, nid, *args, **kwargs):
+        self.model_class.objects.filter(pk=nid).delete()
+        return redirect(self.get_list_url())
+
+我们在app01的stark里面可以自己定义一个类来继承StarkConfig它的方法。
+我们在stark里面可以定义ModelForm用来在保存或者编辑数据时显示错误信息等。
+我们要在这里定义list_display,用来需要显示的字段
+    class UserInfoModelForm(ModelForm):
+        class Meta:
+            model = models.UserInfo
+            fields = '__all__'
+            error_messages = {
+                'name': {
+                    'required': '用户名不能为空',
+                }
+            }
+
+
+    class UserInfoConfig(v1.StarkConfig):
+        list_display = ['id', 'name']
+        model_form_class = UserInfoModelForm
+
+
+我们也可以在这里定义函数，它就会走这里(如果没有这个方法就会走StarkConfigd的方法)
+    class HostConfig(v1.StarkConfig):
+        def ip_port(self,obj=None,is_header=False):
+            if is_header:
+                return  '自定义列'
+            return '%s:%s'%(obj.ip,obj.port,)
+        list_display = ['id', 'hostname','ip','port',ip_port]
+        model_form_class = HostModelForm
+        def delete_views(self, request, nid, *args, **kwargs):
+            if request.method=="GET":
+                return  render(request,'stark/my_delete.html')
+            else:
+                self.model_class.objects.filter(pk=nid).delete()
+                return redirect(self.get_list_url())
+    v1.site.register(models.Host, HostConfig)
+
+增删改查的前端页面：
+    我们用的知识点有：静态文件的引入：{% load staticfiles %}   <link rel="stylesheet" href="{% static "stark/bootstrap/css/bootstrap.css" %}" />
+        {% include 'stark/form.html' %}  这个来引入几个文件共同的部分。
+        通过部分的代码：
+        <form method="post"  class="form-horizontal" novalidate>
+            {% csrf_token %}
+            {% for field in form %}
+                <div class="col-sm-6">
+                    <div class="form-group">
+                        <label for="inputEmail3" class="col-sm-2 control-label">{{ field.label }}</label>
+                        <div class="col-sm-10">
+                            {{ field }}
+                            {{ field.errors.0 }}
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+            <div class="col-sm-offset-11 col-sm-1">
+                <input type="submit" class="btn btn-primary" value="提交">
+            </div>
+        </form>
+
+
+
+
+
+
+

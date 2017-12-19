@@ -24,6 +24,8 @@ class Role(models.Model):
     def __str__(self):
         return self.name
 
+
+
 class Host(models.Model):
     hostname = models.CharField(verbose_name='主机名字', max_length=32)
     ip = models.GenericIPAddressField(verbose_name='IP', max_length=64)
