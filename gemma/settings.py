@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'app01.apps.App01Config',
     'app2.apps.App2Config',
+    'app04.apps.App04Config',
     'stark.apps.StarkConfig',
 ]
 

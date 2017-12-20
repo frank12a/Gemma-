@@ -1,55 +1,150 @@
+import copy
 from django.conf.urls import url
 from django.shortcuts import HttpResponse, render, redirect
 from django.conf.urls import url
 from django.utils.safestring import mark_safe
 from django.urls import reverse
-
 from django.http import QueryDict
 from django.db.models import Q
 
 
+class FilterOption(object):
+    def __init__(self, field_name, multi=False, condition=None, is_choice=False):
+        self.field_name = field_name  # 组合筛选的字段
+        self.multi = multi  # 是否可以多选
+        self.condition = condition  # 筛选的条件
+        self.is_choice = is_choice  # 这个不知道
+
+    def get_queryset(self, _field):
+        if self.condition:
+            return _field.rel.to.objects.filter(**self.condition)
+        return _field.rel.to.objects.all()
+
+    def get_choices(self, _field):
+        return _field.choices
+
+
+class FilterRow(object):
+    def __init__(self, option, data, request):
+        self.data = data
+        self.option = option  # 这个option是FilterOption的对象
+        self.request = request
+
+    def __iter__(self):
+        params = copy.deepcopy(self.request.GET)
+        params._mutable = True
+        current_id = params.get(self.option.field_name)
+        current_id_list = params.getlist(self.option.field_name)
+        if self.option.field_name in params:
+            origin_list=params.pop(self.option.field_name)
+            url = '{0}?{1}'.format(self.request.path_info, params.urlencode())
+            yield mark_safe('<a href="{}">全部</a>'.format(url))
+            params.setlist(self.option.field_name,origin_list)
+
+        else:
+            url = '{0}?{1}'.format(self.request.path_info, params.urlencode())
+            yield mark_safe('<a class="active" href="{}">全部</a>'.format(url))
+        for val in self.data:
+            if self.option.is_choice:
+                pk, text = str(val[0]), val[1]
+            else:
+                pk, text = str(val.pk), str(val)
+            # 当前Url  self.request.path_info
+            # 问好后面的数据self.request.GET
+            if not self.option.multi:
+                # 单选
+                params[self.option.field_name] = pk
+                url = '{0}?{1}'.format(self.request.path_info, params.urlencode())
+                if current_id == pk:
+                    yield mark_safe('<a href="{0}" class="active">{1}</a>'.format(url, text))
+                else:
+                    yield mark_safe('<a href="{0}" >{1}</a>'.format(url, text))
+            else:
+                # 多选
+                _parmas = copy.deepcopy(params)
+                print('_parmas',_parmas)
+                id_list = _parmas.getlist(self.option.field_name)
+                print('id_list',id_list)
+                print('current_id_list',current_id_list)
+                if pk in current_id_list:
+                    id_list.remove(pk)
+                    _parmas.setlist(self.option.field_name, id_list)
+                    url = '{0}?{1}'.format(self.request.path_info, _parmas.urlencode())
+                    yield mark_safe('<a href="{0}" class="active">{1}</a>'.format(url, text))
+
+                else:
+                    id_list.append(pk)
+                    _parmas.setlist(self.option.field_name, id_list)
+                    url = '{0}?{1}'.format(self.request.path_info, _parmas.urlencode())
+                    yield mark_safe('<a href="{0}" >{1}</a>'.format(url, text))
+
+
 class ChangeList(object):
     def __init__(self, config, queryset):
-        self.config = config       #这是StarkConfig传过来的self
-        self.list_display = config.get_list_display()#这是显示的字段
-        self.model_class = config.model_class  #这是我们要处理的类
-        self.request = config.request #这是传过来self的request
-        self._query_param_key = '_listfilter' #这是为了返回页面时定义的一个名字
+        self.config = config  # 这是StarkConfig传过来的self
+        self.list_display = config.get_list_display()  # 这是显示的字段
+        self.model_class = config.model_class  # 这是我们要处理的类
+        self.request = config.request  # 这是传过来self的request
+        self.comb_filter = config.get_comb_filter()
 
+        self._query_param_key = '_listfilter'  # 这是为了返回页面时定义的一个名字
+        self.actions = config.get_actions()  # 这是actions的函数
+        self.show_actions = config.get_show_actions()  # 这是是否显示actions
+        self.show_add_btn = config.get_show_add_btn()  # 这是是否要显示增加按钮
 
-
-
-        self.show_add_btn=config.get_show_add_btn()#这是是否要显示增加按钮
-        self.show_search_form=config.get_show_search_form()#这是是否要显示搜索按钮
-        self.show_add_btn=config.get_show_add_btn()#这是是否要显示增加按钮
-        self.add_url=config.get_add_url()#这是增加按钮的url
-        self.search_form_val=config.request.GET.get(config.search_key,'')#这是查询时显示查询的内容
-        self.show_actions=config.get_show_actions()#这是是否显示actions
-        self.actions=config.get_actions()#这是actions的函数
+        # 搜索用
+        self.show_search_form = config.get_show_search_form()  # 这是是否要显示搜索按钮
+        self.search_form_val = config.request.GET.get(config.search_key, '')  # 这是查询时显示查询的内容
 
         from utils.pager import Pagination
-        current_page = self.request.GET.get('page', 1)#查询现在的页面
-        total_count = queryset.count()#查询所有的记录数
-        page_obj = Pagination(current_page, total_count, self.request.path_info, self.request.GET, )#这是关于页面处理的插件
-        self.page_obj = page_obj#这是关于页面的所有函数
-        self.data_list = queryset[page_obj.start:page_obj.end] #关于页面的起止页
-    def modify_actions(self):#这是action里面处理的函数
-        result=[]
+        current_page = self.request.GET.get('page', 1)  # 查询现在的页面
+        total_count = queryset.count()  # 查询所有的记录数
+        page_obj = Pagination(current_page, total_count, self.request.path_info, self.request.GET, )  # 这是关于页面处理的插件
+        self.page_obj = page_obj  # 这是关于页面的所有函数
+
+        self.data_list = queryset[page_obj.start:page_obj.end]  # 关于页面的起止页
+
+        # #这是不一样的代码
+        self.show_add_btn = config.get_show_add_btn()  # 这是是否要显示增加按钮
+        self.add_url = config.get_add_url()  # 这是增加按钮的url
+
+    def gen_comb_filter(self):
+        from django.db.models import ForeignKey, ManyToManyField
+        for option in self.comb_filter:  # option是个FilterOption对象
+            _field_name = self.model_class._meta.get_field(option.field_name)  # 找到的是的表的字段
+            print('_field_name', _field_name)
+            if isinstance(_field_name, ForeignKey):
+                # temp = _field_name.rel.to.objects.all()
+                temp = FilterRow(option, option.get_queryset(_field_name), self.request)
+                # temp = FilterRow(_field_name.rel.to.objects.all())
+
+            elif isinstance(_field_name, ManyToManyField):
+                # temp=_field_name.rel.to.objects.all()
+                # temp = FilterRow(_field_name.rel.to.objects.all())
+                temp = FilterRow(option, option.get_queryset(_field_name), self.request)
+                # temp = FilterRow(_field_name.rel.to.objects.all())
+            else:
+                # temp=_field_name.choices
+                # temp = FilterRow(_field_name.choices)
+                temp = FilterRow(option, option.get_choices(_field_name), self.request)
+            yield temp
+
+    def modify_actions(self):  # 这是action里面处理的函数
+        result = []
         for func in self.actions:
-            temp={'name':func.__name__,'text':func.short_desc}
+            temp = {'name': func.__name__, 'text': func.short_desc}
             result.append(temp)
         return result
-    def get_change_url(self, nid):#这是编辑页面的反向解析
+
+    def get_change_url(self, nid):  # 这是编辑页面的反向解析
         name = '%s/%s/change_list' % (self.model_class._meta.app_label, self.model_class._meta.model_name,)
         change_url = reverse(name, args=(nid,))
         return change_url
 
-    def get_delete_url(self, nid):#这是删除页面的反向解析
-        name = '%s/%s/delete_list' % (self.model_class._meta.app_label, self.model_class._meta.model_name,)
-        delete_url = reverse(name, args=(nid,))
-        return delete_url
+    def add_url(self):
+        return self.config.get_add_url
 
-    def head_list(self):#这是处理头部数据的
+    def head_list(self):  # 这是处理头部数据的
         result = []
         for field_name in self.list_display:
             if isinstance(field_name, str):
@@ -73,13 +168,11 @@ class ChangeList(object):
             new_data_list.append(temp)
         return new_data_list
 
-    def get_add_url(self):#这是增加函数的反向解析
-        name = '%s/%s/add_list' % (self.model_class._meta.app_label, self.model_class._meta.model_name,)
-        add_url = reverse(name)
-        return add_url
-
-    def add_url(self):
-        return self.config.get_add_url
+    # 这是要删除的url
+    def get_delete_url(self, nid):  # 这是删除页面的反向解析
+        name = '%s/%s/delete_list' % (self.model_class._meta.app_label, self.model_class._meta.model_name,)
+        delete_url = reverse(name, args=(nid,))
+        return delete_url
 
 
 class StarkConfig(object):
@@ -87,8 +180,9 @@ class StarkConfig(object):
         self.model_class = model_class
         self.site = site
         self.request = None
-        self._query_param_key = '_listfilter'#这是
+        self._query_param_key = '_listfilter'  # 这是
         self.search_key = 'q'
+
     def checkbox(self, obj=None, is_header=False):
         if is_header:
             return '选择'
@@ -115,70 +209,7 @@ class StarkConfig(object):
         return mark_safe("<a href='%s'>删除</a>" % (self.get_delete_url(obj.id)))
 
     list_display = []
-    #actions定制
-    #是否显示在前端显示
-    show_actions=True
-    def get_show_actions(self):
-        return  self.show_actions
-    actions=[]#默认actions是空的
-    def get_actions(self):#这里面放的是actions的函数
-        result=[]
-        if self.actions:
-            result.extend(self.actions)
-        print('result',result)
-        return result
 
-
-    def get_show_add_btn(self):
-        return self.show_add_btn
-    #是否要显示搜索按钮
-    show_search_form=True
-    def get_show_search_form(self):
-        return self.show_search_form
-
-    #这是删除url的反向解析
-    def get_delete_url(self, nid):
-        name = '%s/%s/delete_list' % (self.model_class._meta.app_label, self.model_class._meta.model_name,)
-        delete_url = reverse(name, args=(nid,))
-        return delete_url
-
-    def get_add_url(self):
-        name = '%s/%s/add_list' % (self.model_class._meta.app_label, self.model_class._meta.model_name,)
-        add_url = reverse(name)
-        return add_url
-    def get_search_form_condition(self):
-        if self.request.method == 'GET':
-            print('数据', self.request.GET.get(self.search_key))
-            key_word = self.request.GET.get(self.search_key)
-            search_fields = self.get_search_fields()
-            condition = Q()
-            condition.connector = 'or'
-            if key_word and self. get_show_search_form:
-                for field_name in search_fields:
-                    condition.children.append((field_name, key_word))
-            return  condition
-
-    # 编辑页面的路由系统的反射
-    # def get_change_url(self, nid):
-    #     name = '%s/%s/change_list' % (self.model_class._meta.app_label, self.model_class._meta.model_name,)
-    #     change_url = reverse(name, args=(nid,))
-    #     return change_url
-    # 增加页面的路由系统的反射
-    # def get_add_url(self):
-    #     name = '%s/%s/add_list' % (self.model_class._meta.app_label, self.model_class._meta.model_name,)
-    #     add_url = reverse(name)
-    #     return add_url
-    # 删除页面
-    # def get_delete_url(self, nid):
-    #     name = '%s/%s/delete_list' % (self.model_class._meta.app_label, self.model_class._meta.model_name,)
-    #     delete_url = reverse(name, args=(nid,))
-    #     return delete_url
-    # 展示页面的路由系统的反射
-    def get_list_url(self):
-        name = '%s/%s/show_lists' % (self.model_class._meta.app_label, self.model_class._meta.model_name,)
-        list_url = reverse(name)
-        return list_url
-    # 需要页面显示的字段
     def get_list_display(self):
         data = []
         if self.list_display:
@@ -188,25 +219,121 @@ class StarkConfig(object):
             data.insert(0, StarkConfig.checkbox)
         return data
 
-    # 添加按钮
+
+        # 添加按钮
+
     show_add_btn = True
 
     # 显示按钮
     def get_show_add_btn(self):
         return self.show_add_btn
 
+    model_form_class = None
+
+    def get_model_form_class(self):
+        if self.model_form_class:
+            return self.model_form_class
+        from django.forms import ModelForm
+        # class TestModelForm(ModelForm):
+        #     class Meta:
+        #         model = self.model_class
+        #         fields = '__all__'
+        meta = type('meta', (object,), {'model': self.model_class, 'fields': '__all__'})
+        TestModelForm = type("TestModelForm", (ModelForm,), {"Meta": meta})
+        return TestModelForm
+
+    # actions定制
+    # 是否显示在前端显示
     search_fields = []
+
     def get_search_fields(self):
         result = []
         if self.search_fields:
             result.extend(self.search_fields)
         return result
 
+    show_actions = True
+
+    def get_show_actions(self):
+        return self.show_actions
+
+    actions = []  # 默认actions是空的
+
+    def get_actions(self):  # 这里面放的是actions的函数
+        result = []
+        if self.actions:
+            result.extend(self.actions)
+        print('result', result)
+        return result
+
+    # 是否要显示搜索按钮
+    show_search_form = True
+
+    def get_show_search_form(self):
+        return self.show_search_form
+
+    # 这是删除url的反向解析
+    def get_delete_url(self, nid):
+        name = '%s/%s/delete_list' % (self.model_class._meta.app_label, self.model_class._meta.model_name,)
+        delete_url = reverse(name, args=(nid,))
+        return delete_url
+
+    def get_add_url(self):
+        name = '%s/%s/add_list' % (self.model_class._meta.app_label, self.model_class._meta.model_name,)
+        add_url = reverse(name)
+        return add_url
+
+    def get_search_form_condition(self):
+        if self.request.method == 'GET':
+            print('数据', self.request.GET.get(self.search_key))
+            key_word = self.request.GET.get(self.search_key)
+            search_fields = self.get_search_fields()
+            condition = Q()
+            condition.connector = 'or'
+            if key_word and self.get_show_search_form:
+                for field_name in search_fields:
+                    condition.children.append((field_name, key_word))
+            return condition
+
+    # 编辑页面的路由系统的反射
+    def get_change_url(self, nid):
+        name = '%s/%s/change_list' % (self.model_class._meta.app_label, self.model_class._meta.model_name,)
+        change_url = reverse(name, args=(nid,))
+        return change_url
+
+    # 增加页面的路由系统的反射
+    def get_add_url(self):
+        name = '%s/%s/add_list' % (self.model_class._meta.app_label, self.model_class._meta.model_name,)
+        add_url = reverse(name)
+        return add_url
+
+    # 删除页面
+    def get_delete_url(self, nid):
+        name = '%s/%s/delete_list' % (self.model_class._meta.app_label, self.model_class._meta.model_name,)
+        delete_url = reverse(name, args=(nid,))
+        return delete_url
+
+    # 展示页面的路由系统的反射
+    def get_list_url(self):
+        name = '%s/%s/show_lists' % (self.model_class._meta.app_label, self.model_class._meta.model_name,)
+        list_url = reverse(name)
+        return list_url
+        # 需要页面显示的字段
+
+    ##组合搜索
+    comb_filter = []
+
+    def get_comb_filter(self):
+        result = []
+        if self.comb_filter:
+            result.extend(self.comb_filter)
+        return result
 
     def wrap(self, view_func):
         def inner(request, *args, **kwargs):
             self.request = request
             return view_func(request, *args, **kwargs)
+
         return inner
 
     # 生成URL
@@ -226,34 +353,30 @@ class StarkConfig(object):
 
     # 展示页面
     def changelist(self, request, *args, **kwargs):
-            if request.method=="POST" and self.get_show_actions():
-                   func_name_str=request.POST.get("list_actions")
-                   print('PK',request.POST.get('pk'))
-                   actions_func=getattr(self,func_name_str)
-                   ret=actions_func(request)
-                   if ret:
-                       return  ret
+        if request.method == "POST" and self.get_show_actions():
+            func_name_str = request.POST.get("list_actions")
+            print('PK', request.POST.get('pk'))
+            actions_func = getattr(self, func_name_str)
+            ret = actions_func(request)
+            if ret:
+                return ret
+        comb_condition = {}
+        print('组合搜索条件', request.GET)
+        option_list = self.get_comb_filter()
+        for key in request.GET.keys():
+            value_list = request.GET.getlist(key)
+            flag = False
+            for option in option_list:
+                if option.field_name == key:
+                    flag = True
+                    break
+            if flag:
+                comb_condition['%s__in' % key] = value_list
 
-
-
-            queryset = self.model_class.objects.filter(self.get_search_form_condition())
-            cl = ChangeList(self, queryset)
-            print(cl.body_list)
-            return render(request, "stark/changelist.html", {'cl': cl})
-
-    model_form_class = None
-
-    def get_model_form_class(self):
-        if self.model_form_class:
-            return self.model_form_class
-        from django.forms import ModelForm
-        # class TestModelForm(ModelForm):
-        #     class Meta:
-        #         model = self.model_class
-        #         fields = '__all__'
-        meta = type('meta', (object,), {'model': self.model_class, 'fields': '__all__'})
-        TestModelForm = type("TestModelForm", (ModelForm,), {"Meta": meta})
-        return TestModelForm
+        queryset = self.model_class.objects.filter(self.get_search_form_condition()).filter(**comb_condition)
+        cl = ChangeList(self, queryset)
+        print(cl.body_list)
+        return render(request, "stark/changelist.html", {'cl': cl})
 
     # 增加页面
     def add_views(self, request, *args, **kwargs):
@@ -290,6 +413,7 @@ class StarkConfig(object):
         list_query_str = request.GET.get(self._query_param_key)
         list_url = '%s?%s' % (self.get_list_url(), list_query_str)
         return redirect(list_url)
+
     @property
     def urls(self):
         return self.get_urls()

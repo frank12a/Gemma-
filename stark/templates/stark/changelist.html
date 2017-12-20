@@ -7,10 +7,35 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Title</title>
     <link rel="stylesheet" href="{% static '/bootstrap/css/bootstrap.css' %}">
+    <style>
+        .list-filter a{
+            display: inline-block;
+            padding:3px 5px;
+            margin: 2px 1px;
+            border: 1px solid #2b669a;
+
+        }
+        .list-filter a.active{
+            background-color: #2b669a;
+            color:white;
+        }
+
+    </style>
 </head>
 <body>
+
 <div class="container">
     <h1>列表页面</h1>
+<div class="list-filter">
+    {% for foo in cl.gen_comb_filter %}
+        <div>
+            {% for item in foo %}
+              {{ item }}
+            {% endfor %}
+        </div>
+    {% endfor %}
+</div>
+
     {% if cl.show_search_form %}
         <div class="form-group">
             <form action="" method="get">

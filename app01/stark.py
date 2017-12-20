@@ -17,7 +17,7 @@ class UserInfoModelForm(ModelForm):
 
 class UserInfoConfig(v1.StarkConfig):
     list_display = ['id', 'name','usertype']#页面显示的字段
-    list_filter = ['name', 'usertype']
+    # list_filter = ['name', 'usertype']
     model_form_class = UserInfoModelForm#把自定义的ModelForm作为传过去
     search_fields = ['name__contains', 'id__contains','usertype__contains']#这个是查询的字段是模糊查询
 
