@@ -36,7 +36,7 @@ class UserInfoConfig(v1.StarkConfig):
         html=','.join(html)
         return  html
     list_display = ['id', 'name', 'email', get_gender,get_depart,get_roles ]
-    comb_filter = ['gender','depart','roles']
+    # comb_filter = ['gender','depart','roles']
     comb_filter = [
         v1.FilterOption('gender',is_choice=True),
         v1.FilterOption('depart',),

@@ -1,4 +1,5 @@
 import copy
+import  json
 from django.conf.urls import url
 from django.shortcuts import HttpResponse, render, redirect
 from django.conf.urls import url
@@ -13,34 +14,34 @@ class FilterOption(object):
         self.field_name = field_name  # 组合筛选的字段
         self.multi = multi  # 是否可以多选
         self.condition = condition  # 筛选的条件
-        self.is_choice = is_choice  # 这个不知道
+        self.is_choice = is_choice  # 这个是不是choice
 
-    def get_queryset(self, _field):
+    def get_queryset(self, _field):  # 这个是前面配置的筛选条件
         if self.condition:
             return _field.rel.to.objects.filter(**self.condition)
         return _field.rel.to.objects.all()
 
-    def get_choices(self, _field):
+    def get_choices(self, _field):  # 这个是说明筛选条件是choices
         return _field.choices
 
 
 class FilterRow(object):
     def __init__(self, option, data, request):
-        self.data = data
+        self.data = data  # 这个是赛选条件的数据
         self.option = option  # 这个option是FilterOption的对象
-        self.request = request
+        self.request = request  # 这个就是请求数据
 
     def __iter__(self):
-        params = copy.deepcopy(self.request.GET)
-        params._mutable = True
-        current_id = params.get(self.option.field_name)
-        current_id_list = params.getlist(self.option.field_name)
-        if self.option.field_name in params:
-            origin_list=params.pop(self.option.field_name)
+        params = copy.deepcopy(self.request.GET)  # 首先把request.GET的数据复制一份
+        params._mutable = True  # 可以更改的
+        current_id = params.get(self.option.field_name)  # 这个是单列表
+        current_id_list = params.getlist(self.option.field_name)#这个是多列表
+        if self.option.field_name in params:#如果gender在里面那么全部就不会亮
+            origin_list = params.pop(self.option.field_name)
+            print('origin_list',origin_list)
             url = '{0}?{1}'.format(self.request.path_info, params.urlencode())
             yield mark_safe('<a href="{}">全部</a>'.format(url))
-            params.setlist(self.option.field_name,origin_list)
-
+            params.setlist(self.option.field_name, origin_list)#连个结合在一起的
         else:
             url = '{0}?{1}'.format(self.request.path_info, params.urlencode())
             yield mark_safe('<a class="active" href="{}">全部</a>'.format(url))
@@ -50,7 +51,7 @@ class FilterRow(object):
             else:
                 pk, text = str(val.pk), str(val)
             # 当前Url  self.request.path_info
-            # 问好后面的数据self.request.GET
+            # 问号后面的数据self.request.GET
             if not self.option.multi:
                 # 单选
                 params[self.option.field_name] = pk
@@ -62,10 +63,10 @@ class FilterRow(object):
             else:
                 # 多选
                 _parmas = copy.deepcopy(params)
-                print('_parmas',_parmas)
+                print('_parmas', _parmas)
                 id_list = _parmas.getlist(self.option.field_name)
-                print('id_list',id_list)
-                print('current_id_list',current_id_list)
+                print('id_list', id_list)
+                print('current_id_list', current_id_list)
                 if pk in current_id_list:
                     id_list.remove(pk)
                     _parmas.setlist(self.option.field_name, id_list)
@@ -373,7 +374,7 @@ class StarkConfig(object):
             if flag:
                 comb_condition['%s__in' % key] = value_list
 
-        queryset = self.model_class.objects.filter(self.get_search_form_condition()).filter(**comb_condition)
+        queryset = self.model_class.objects.filter(self.get_search_form_condition()).filter(**comb_condition).distinct()
         cl = ChangeList(self, queryset)
         print(cl.body_list)
         return render(request, "stark/changelist.html", {'cl': cl})
@@ -381,14 +382,39 @@ class StarkConfig(object):
     # 增加页面
     def add_views(self, request, *args, **kwargs):
         model_form_class = self.get_model_form_class()
+        _popbackid = request.GET.get('_popbackid')
+        print('_popbackid',_popbackid)
         if request.method == "GET":
             form = model_form_class()
-            return render(request, 'stark/add_view.html', {'form': form})
+            new_form = []
+            for bfield in form:
+                temp = {'is_popurl': False, 'item': bfield}
+                from django.forms.boundfield import BoundField
+                from django.db.models.query import QuerySet
+                from django.forms.models import ModelChoiceField
+                if isinstance(bfield.field, ModelChoiceField):
+                    related_class_name = bfield.field.queryset.model  # <class 'app04.models.Department'>
+                    if related_class_name in site._registy:  # 这是判断是否注册过
+                        app_model_name = related_class_name._meta.app_label, related_class_name._meta.model_name  # 这是找出反向解析用的
+                        url = reverse('%s/%s/add_list' % app_model_name)  # 反向解析用的基础url
+                        print('url',url)
+                        popurl = ('%s?_popbackid=%s') % (url, bfield.auto_id)  # 这是能找出是哪个的id
+                        print(popurl)
+                        temp['is_popurl'] = True
+                        temp['popurl'] = popurl
+                new_form.append(temp)
+            return render(request, 'stark/add_view.html', {'form': new_form})
         else:
             form = model_form_class(request.POST)
             if form.is_valid():
-                form.save()
-                return redirect(self.get_list_url())
+                new_obj=form.save()
+                if _popbackid:#如果存在就是pop增加的
+                    print('走这里啦')
+                    result={'id':new_obj.id,'text':str(new_obj),'popbackid':_popbackid}  # 构建函数进行传值
+                    return render(request,'stark/pop_response.html',{'json_result':(json.dumps(result,ensure_ascii=False))})
+                else:
+                    print('走这里1')
+                    return redirect(self.get_list_url())
             return render(request, 'stark/add_view.html', {'form': form})
 
     def change_views(self, request, nid, *args, **kwargs):
