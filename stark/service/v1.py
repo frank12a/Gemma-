@@ -294,6 +294,7 @@ class StarkConfig(object):
             if key_word and self.get_show_search_form:
                 for field_name in search_fields:
                     condition.children.append((field_name, key_word))
+            print('conditon',condition)
             return condition
 
     # 编辑页面的路由系统的反射

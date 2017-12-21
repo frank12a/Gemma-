@@ -35,8 +35,7 @@ class UserInfoConfig(v1.StarkConfig):
             html.append(ss)
         html=','.join(html)
         return  html
-    list_display = ['id', 'name', 'email', get_gender,get_depart,get_roles ]
-    # comb_filter = ['gender','depart','roles']
+    list_display = ['id', 'name', 'email', get_gender,get_depart,get_roles ]#这个显示页面有多对多和FK以及choices
     comb_filter = [
         v1.FilterOption('gender',is_choice=True),
         v1.FilterOption('depart',),
