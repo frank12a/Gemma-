@@ -247,3 +247,52 @@
 
 
 
+
+
+
+
+12.22号
+
+
+部门页面去掉了编辑
+把部门名称作为编辑的：
+
+是我们增加了edit_display()
+edit_display=['title']
+我们在V1里面增加一下代码
+
+  我们在Changlist里面增加了
+
+
+
+  self.edit_display = config.get_edit_display()
+  if field_name in self.edit_display:
+      val =self.get_edit_tag(row.pk,val)
+
+
+
+
+  def get_edit_tag(self,pk,text):
+        query_str =self.request.GET.urlencode()
+        params=QueryDict(mutable=True)
+        params[self.config._query_param_key]=query_str
+        return  mark_safe("<a href='%s?%s'>%s</a>"%(self.config.get_change_url(pk),params.urlencode(),text))
+
+
+  我们在Starkconfig里面增加了：
+  edit_display=[]
+    def get_edit_display(self):
+        result=[]
+        if self.edit_display:
+            result.extend(self.edit_display)
+        return  result
+我们把搜索条件往右飘：style='float:right'
+
+
+
+
+用户表我们需要更改的是外键和限制显示的条件
+
+
+
+
