@@ -127,3 +127,11 @@ STATIC_URL = '/static/'
 STATICFILES_DIRS=[
     os.path.join(BASE_DIR,'static')
 ]
+#自定义数据
+MESSAGE_CLASSES=[
+    'utils.message.dingding.DingDing',
+    'utils.message.email.Email',
+    'utils.message.msg.Msg',
+    'utils.message.wechat.Wechat',
+]
+

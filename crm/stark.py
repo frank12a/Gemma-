@@ -1,15 +1,25 @@
-
 from . import models
 from django.conf.urls import url
 from stark.service import v1
 import json
+from django.db.models import Q
+from  utils import message
 
 from django.utils.safestring import mark_safe
-from django.shortcuts import HttpResponse,redirect,render
+from django.shortcuts import HttpResponse, redirect, render
 from django.utils.safestring import mark_safe
 from django.urls import reverse
+# from crm.config.student1  import Studentconfig
+# from crm.config.customer  import CustomerConfig
+import datetime
+
+from django.forms import ModelForm
 
 
+class SingleModelForm(ModelForm):
+    class Meta:
+        model = models.Customer
+        exclude = ['last_consult_date', 'recv_date', 'status', 'consultant',]
 class DepartmentConfig(v1.StarkConfig):
     '''
     这是部门表实现了：显示字段、搜索、actions
@@ -132,6 +142,96 @@ class CustomerConfig(v1.StarkConfig):
     客户信息：显示字段、
     '''
 
+    def extra_url(self):
+        app_model_name = (self.model_class._meta.app_label, self.model_class._meta.model_name,)
+        urls = [
+
+            url(r'^public/$', self.wrap(self.public), name='%s/%s/public' % app_model_name),
+            url(r'^(\d+)/competion/$', self.wrap(self.competion), name='%s/%s/competion' % app_model_name),
+            url(r'^sale_views/$', self.wrap(self.sale_views), name='%s/%s/sale_views' % app_model_name),
+            url(r'^single/$', self.wrap(self.single), name='%s/%s/single' % app_model_name),
+        ]
+        return urls
+    def public(self,request):
+        date_now=datetime.datetime.now().date()#当前时间
+        date_time_15=datetime.timedelta(days=15)
+        date_time_3=datetime.timedelta(days=3)
+        deadline1=date_now-date_time_15
+        deadline2=date_now-date_time_3
+        #方法一：
+        con = Q()
+        q3=Q(('status',2))
+        q1 = Q()
+        q1.children.append(('last_consult_date__lt', deadline2))
+        q2 = Q()
+        q2.children.append(('recv_date__lt',deadline1))
+        con.add(q1, 'OR')
+        con.add(q2, 'OR')
+        con.add(q3,'AND')
+        #方法二：
+        # models_list=models.Customer.objects.filter(Q(recv_date__lt=deadline1)|Q(last_consult_date__lt=deadline2),status=2)
+        models_list=models.Customer.objects.filter(con)
+        print(models_list)
+        return  render(request,'custmoer_public.html',{'models_list':models_list})
+        # return  HttpResponse('ok')
+    def competion(self,request,cid):#抢单
+        """
+        抢单的代码
+        """
+        current_user_id=5
+        #首选判断这个用户是不是在公共的里面和客户顾问不是他本人
+        date_now = datetime.datetime.now().date()  # 当前时间
+        date_time_15 = datetime.timedelta(days=15)
+        date_time_3 = datetime.timedelta(days=3)
+        deadline1 = date_now - date_time_15
+        deadline2 = date_now - date_time_3
+        is_exist=models.Customer.objects.filter(Q(recv_date__lt=deadline1)|Q(last_consult_date__lt=deadline2),status=2).exclude(consultant_id=current_user_id).update(last_consult_date=date_now,recv_date=date_now,consultant_id=current_user_id)
+        if not is_exist:
+            return HttpResponse("手速慢")
+        models.CustomerDistribution.objects.filter(user_id=current_user_id,customer_id=cid,ctime=date_now)
+        # return  redirect(request.path_info)
+        return HttpResponse("抢单成功")
+    def sale_views(self,request):#分配表里查看
+        current_user_id = 5
+        # customer_list=models.CustomerDistribution.objects.filter(user_id=current_user_id).order_by('status')
+        customer_list=models.Customer.objects.filter(consultant_id=current_user_id)
+        return render(request,'sale_views.html',{"customer_list":customer_list})
+    def single(self,request):
+       if request.method=="GET":
+           form=SingleModelForm()
+           return render(request,'single_form.html',{'form':form})
+       else:
+         from xxxxxx import XXX
+         form=SingleModelForm(request.POST)
+         if form.is_valid():
+             sale_id = XXX.get_sale_id()
+             if  not sale_id:
+                 return  HttpResponse("没有客户顾问无法分配")
+             ctime=datetime.datetime.now().date()
+             from django.db import transaction
+             try:
+                with transaction.atomic():
+                     #方法一
+                     form.instance.consultant_id = sale_id
+                     form.instance.recv_date = ctime
+                     form.instance.last_consult_date = ctime
+                     obj = form.save()
+                     #方法二
+                     # form.cleaned_data['consultant_id'] = sale_id
+                     # form.cleaned_data['recv_date']= ctime
+                     # form.cleaned_data['last_consult_date']= ctime
+                     # course_list=form.cleaned_data.pop('course')
+                     # print(course_list)
+                     # obj=models.Customer.objects.create(**form.cleaned_data)
+                     # obj.course.add(*course_list)
+                     models.CustomerDistribution.objects.create(user_id=sale_id,customer=obj,ctime=ctime)
+                     #发短信
+             except Exception as e:
+                 XXX.rollback(sale_id)
+             message.send_message('自动发送','很，兴奋代码自动发送邮件，','2981405421@qq.com','大毛')
+             return HttpResponse('保存成功')
+         else:
+             return render(request, 'single_form.html', {'form': form})
     # search_fields = ['qq__contains','name__contains','title__contains','title__contains','title__contains','title__contains','title__contains']
     def get_gendr(self, obj=None, is_header=None):
         if is_header:
@@ -170,7 +270,7 @@ class CustomerConfig(v1.StarkConfig):
         html = ','.join(html)
         return html
 
-    def get_status(self, obj=None, is_header=None):
+    def get_status1(self, obj=None, is_header=None):
         if is_header:
             return '状态'
         return obj.get_status_display()
@@ -187,7 +287,7 @@ class CustomerConfig(v1.StarkConfig):
         return mark_safe("<a href='/stark/crm/consultrecord/?customer=%s'>查看跟进记录</a>" % (obj.pk,))
 
     list_display = ['qq', 'name', get_gendr, get_education, 'graduation_school', 'major', get_experience,
-                    get_status, 'company', 'salary', get_source, get_course, get_status, recode]
+                    get_status, 'company', 'salary', 'date',get_source, get_course, get_status1, recode]
 
     # 搜索
     search_fields = ['qq__contains', 'name__contains', 'graduation_school__contains', 'major__contains',
@@ -195,15 +295,16 @@ class CustomerConfig(v1.StarkConfig):
                      'last_consult_date__contains', ]  #
 
     comb_filter = [
-        v1.FilterOption('gender', is_choice=True),
-        v1.FilterOption('education', is_choice=True),
-        v1.FilterOption('experience', is_choice=True),
-        v1.FilterOption('work_status', is_choice=True),
-        v1.FilterOption('source', is_choice=True),
-        v1.FilterOption('course', True),
-        v1.FilterOption('status', is_choice=True),
-        v1.FilterOption('consultant', ),
+        # v1.FilterOption('gender', is_choice=True),
+        # v1.FilterOption('education', is_choice=True),
+        # # v1.FilterOption('experience', is_choice=True),
+        # # v1.FilterOption('work_status', is_choice=True),
+        # # v1.FilterOption('source', is_choice=True),
+        # # v1.FilterOption('course', True),
+        # v1.FilterOption('status', is_choice=True),
+        # v1.FilterOption('consultant', ),
     ]
+    order_by = ['-status']
 
 
 v1.site.register(models.Customer, CustomerConfig)
@@ -230,50 +331,51 @@ class ConsultRecordConfig(v1.StarkConfig):
 v1.site.register(models.ConsultRecord, ConsultRecordConfig)
 
 
-
 class StudyRecordconfig(v1.StarkConfig):
-    def get_record(self,obj=None,is_header=False):
+    def get_record(self, obj=None, is_header=False):
         if is_header:
             return '上课记录'
-        return  obj.get_record_display()
+        return obj.get_record_display()
+
     list_display = ['course_record', 'student', get_record]
     show_search_form = False
     comb_filter = [
         v1.FilterOption('course_record', ),
-                     ]
-    show_combe_fileter=False
-    def get_checked(self,request):
+    ]
+    show_combe_fileter = False
+
+    def get_checked(self, request):
         pk_list = request.POST.getlist('pk')
         models.StudyRecord.objects.filter(id__in=pk_list).update(record='checked')
 
-    get_checked.short_desc='已签到'
-    def get_vacate(self,request):
+    get_checked.short_desc = '已签到'
+
+    def get_vacate(self, request):
         pk_list = request.POST.getlist('pk')
         models.StudyRecord.objects.filter(id__in=pk_list).update(record='vacate')
-    get_vacate.short_desc='请假'
 
-    def get_late(self,request):
+    get_vacate.short_desc = '请假'
+
+    def get_late(self, request):
         pk_list = request.POST.getlist('pk')
         models.StudyRecord.objects.filter(id__in=pk_list).update(record='late')
 
     get_late.short_desc = '迟到'
 
-    def get_noshow(self,request):
+    def get_noshow(self, request):
         pk_list = request.POST.getlist('pk')
         models.StudyRecord.objects.filter(id__in=pk_list).update(record='noshow')
 
     get_noshow.short_desc = '缺勤'
 
-    def get_leave_early(self,request):
-        pk_list=request.POST.getlist('pk')
-        print('pk',pk_list)
+    def get_leave_early(self, request):
+        pk_list = request.POST.getlist('pk')
+        print('pk', pk_list)
         models.StudyRecord.objects.filter(id__in=pk_list).update(record='leave_early')
+
     get_leave_early.short_desc = '早退'
-    actions = [get_checked,get_vacate,get_late,get_noshow,get_leave_early]
+    actions = [get_checked, get_vacate, get_late, get_noshow, get_leave_early]
     show_add_btn = False
-
-
-
 
 
 v1.site.register(models.StudyRecord, StudyRecordconfig)
@@ -285,28 +387,28 @@ class CourseRecordconfig(v1.StarkConfig):
         urls = [
 
             url(r'^score_list/(\d+)$', self.wrap(self.score_list), name='%s/%s/score_list' % app_model_name),
-    ]
+        ]
 
         return urls
 
-    def score_list(self,request,nid):
-        if request.method=='GET':
-            study_list=models.StudyRecord.objects.filter(course_record_id=nid)
-            choices=models.StudyRecord.score_choices
+    def score_list(self, request, nid):
+        if request.method == 'GET':
+            study_list = models.StudyRecord.objects.filter(course_record_id=nid)
+            choices = models.StudyRecord.score_choices#这个是静态字段的查询
             return render(request, 'scorelist.html', {"study_list": study_list, 'choices': choices})
-        elif request.method=='POST':
+        elif request.method == 'POST':
             # data={
             #     '3':{'select_name':80,"homework":'你好'},
             #     '2':{'select_name':70,"homework":'你好呀'},
             #     ''' 'select_name_2': ['80'], 'homework_note_2': ['和那后'], 'select_name_3': ['80'], 'homework_note_3': ['韩浩']}>
             #     '''
             # }
-            print('******',request.POST)
-            data_dict={}
+            print('******', request.POST)
+            data_dict = {}
             for k, val in request.POST.items():
                 print(k)
-                if k =='csrfmiddlewaretoken':
-                      continue
+                if k == 'csrfmiddlewaretoken':
+                    continue
                 name, id = k.rsplit('_', 1)
                 if id not in data_dict:
                     print(id)
@@ -314,44 +416,40 @@ class CourseRecordconfig(v1.StarkConfig):
                 else:
                     data_dict[id][name] = val
             print(data_dict)
-            for k,val in data_dict.items():
-               models.StudyRecord.objects.filter(id=k).update(**val)
-            return  redirect(request.path_info)
-
-
-
-
-
+            for k, val in data_dict.items():
+                models.StudyRecord.objects.filter(id=k).update(**val)
+            return  redirect(request.path_info)#返回当前页面
+            # return render(request, 'scorelist.html')
 
     def get_kaoqin(self, obj=None, is_header=False):
         if is_header:
             return '考勤记录'
-        return mark_safe('<a href="/frank/crm/studyrecord/?course_record=%s">考勤记录</a>'%(obj.pk))
+        return mark_safe('<a href="/frank/crm/studyrecord/?course_record=%s">考勤记录</a>' % (obj.pk))
 
     def get_scorelist(self, obj=None, is_header=False):
         if is_header:
             return '分数统计'
-        rurl=reverse('%s/%s/score_list'%(self.model_class._meta.app_label, self.model_class._meta.model_name,),args=(obj.pk,))
+        rurl = reverse('%s/%s/score_list' % (self.model_class._meta.app_label, self.model_class._meta.model_name,),
+                       args=(obj.pk,))
         # return mark_safe('<a href="/frank/crm/courserecord/score_list/%s">分数录入</a>' % (obj.pk))
         return mark_safe('<a href="%s">分数录入</a>' % rurl)
 
-    list_display = ['class_obj', 'day_num', get_kaoqin,get_scorelist]
+    list_display = ['class_obj', 'day_num', get_kaoqin, get_scorelist]
     show_search_form = False
 
-
-    def multi_init(self,request):#这个是初始化上课记录
-        courserecord_list = request.POST.getlist('pk')# 获取所有的需要初始化的班级的id
-        crecord_list = models.CourseRecord.objects.filter(id__in=courserecord_list) # 获取所有需要初始化的班级对象
-        for record in crecord_list: # 循环每个需要初始化的对象
-            is_exists=models.StudyRecord.objects.filter(course_record=record).exists() # 判断在学生记录上是否有这个版的记录
-            if is_exists:        #如果存在就跳过
+    def multi_init(self, request):  # 这个是初始化上课记录
+        courserecord_list = request.POST.getlist('pk')  # 获取所有的需要初始化的班级的id
+        crecord_list = models.CourseRecord.objects.filter(id__in=courserecord_list)  # 获取所有需要初始化的班级对象
+        for record in crecord_list:  # 循环每个需要初始化的对象
+            is_exists = models.StudyRecord.objects.filter(course_record=record).exists()  # 判断在学生记录上是否有这个版的记录
+            if is_exists:  # 如果存在就跳过
                 continue
-            student_list=models.Student.objects.filter(class_list=record.class_obj)# 找到班级所有的学生
-            bulk_list=[]
+            student_list = models.Student.objects.filter(class_list=record.class_obj)  # 找到班级所有的学生
+            bulk_list = []
             for student in student_list:
-                bulk_list.append(models.StudyRecord(student=student,course_record=record))
-            models.StudyRecord.objects.bulk_create(bulk_list)
-        for record in  crecord_list:
+                bulk_list.append(models.StudyRecord(student=student, course_record=record))
+            models.StudyRecord.objects.bulk_create(bulk_list)#这个不需要用**
+        for record in crecord_list:
             models.StudyRecord.objects.filter()
             models.Student.objects.filter()
 
@@ -368,46 +466,46 @@ class Studentconfig(v1.StarkConfig):
     def extra_url(self):
         app_model_name = (self.model_class._meta.app_label, self.model_class._meta.model_name,)
         urls = [
-
             url(r'^get_score_view/(\d+)$', self.wrap(self.get_score_view), name='%s/%s/get_score' % app_model_name),
             url(r'^score_show/$', self.wrap(self.score_show), name='%s/%s/score_show' % app_model_name),
         ]
-        return  urls
-    def score_show(self,request):
-        ret={'status':False,'data':None,'msg':None}
+        return urls
+
+    def score_show(self, request):
+        ret = {'status': False, 'data': None, 'msg': None}
         try:
-            cid=request.GET.get('cid')#是班级的id
+            cid = request.GET.get('cid')  # 是班级的id
             print(cid)
-            sid=request.GET.get('sid')#是任呀
+            sid = request.GET.get('sid')  # 是任呀
             print(sid)
-            record_list=models.StudyRecord.objects.filter(student_id=sid,course_record__class_obj_id=cid)
-            print('fuck',record_list)
-            data=[]
+            record_list = models.StudyRecord.objects.filter(student_id=sid, course_record__class_obj_id=cid)
+            print('fuck', record_list)
+            data = []
             for item in record_list:
-                day='day%s'%item.course_record.day_num
-                data.append(['day',item.score])
-            ret['status']=True
-            ret['data']=data
-        except Exception as e :
-            ret['msg']=str(e)
-        return  HttpResponse(json.dumps(ret))
+                day = 'day%s' % item.course_record.day_num
+                data.append([day, item.score])
+            ret['status'] = True
+            ret['data'] = data
+        except Exception as e:
+            ret['msg'] = str(e)
+        return HttpResponse(json.dumps(ret))
 
-
-
-    def get_score_view(self,request,nid):
-        obj=models.Student.objects.filter(id=nid).first()
+    def get_score_view(self, request, nid):
+        obj = models.Student.objects.filter(id=nid).first()
         if not obj:
             return HttpResponse('查无此人')
-        class_list=obj.class_list.all()
+        class_list = obj.class_list.all()
 
-        return  render(request,'score_view.html',{"class_list":class_list,'sid':nid})
-    def get_score(self,obj=None,is_header=False):
+        return render(request, 'score_view.html', {"class_list": class_list, 'sid': nid})
+
+    def get_score(self, obj=None, is_header=False):
         if is_header:
             return '查看分数'
-        urls=reverse('%s/%s/get_score'%(self.model_class._meta.app_label, self.model_class._meta.model_name,),args=(obj.pk,))
-        return  mark_safe("<a href='%s'>查看分数</a>"%urls)
-    list_display = ['username',get_score ]
+        urls = reverse('%s/%s/get_score' % (self.model_class._meta.app_label, self.model_class._meta.model_name,),
+                       args=(obj.pk,))
+        return mark_safe("<a href='%s'>查看分数</a>" % urls)#反向解析
 
+    list_display = ['username', get_score]
 
 
 v1.site.register(models.Student, Studentconfig)

@@ -16,9 +16,11 @@ Including another URLconf
 from django.conf.urls import url
 from django.contrib import admin
 from stark.service import v1
+from crm import views
 
 
 urlpatterns = [
     # url(r'^admin/', admin.site.urls),
     url(r'^frank/', v1.site.urls),
+    url(r'^login/', views.login),
 ]

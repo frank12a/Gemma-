@@ -1,13 +1,7 @@
-{% load staticfiles %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Title</title>
-    <link rel="stylesheet" href="{% static '/bootstrap/css/bootstrap.css' %}">
-    <style>
+{% extends 'stark/layout.html' %}
+
+    {% block css %}
+        <style>
         .list-filter a{
             display: inline-block;
             padding:3px 5px;
@@ -21,10 +15,12 @@
         }
 
     </style>
-</head>
-<body>
+    {% endblock %}
+
+
 
 <div class="container">
+{% block body %}
     <h1>列表页面</h1>
 {% if cl.show_combe_fileter %}
 <div class="list-filter">
@@ -98,6 +94,5 @@
 
         </ul>
     </nav>
-</div>
-</body>
-</html>
+{% endblock %}
+

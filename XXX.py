@@ -50,13 +50,44 @@ class Foo(object):
 # end_time=time.time()
 # print("times:%s"%(end_time-start_time))
 import copy
-a=[1,2,[3,4,],'fuck']
-b=a.copy()
+# a=[1,2,[3,4,],'fuck']
+# b=a.copy()
 # a.append(5)
-print(b,id(b))
-print(a,id(a))
+# print(b,id(b))
+# print(a,id(a))
 # for i in a:
 #     print(id(i))
 # for i in b:
 #     print(id(i))
 
+x=[3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,]
+y=[1,1,1,1,1,1,1,1,1,1,1,]
+z=[2,2,2,2,2,2]
+# xyz=zip(x,y,z)
+# print(list(xyz))
+list=[]
+i=1
+
+for i in range(15):
+    if i < 15:
+        list.append(3)
+        if i < 10:
+            list.append(1)
+            if i < 5:
+                list.append(2)
+                if i < 5:
+                    list.append(6)
+
+print((list))
+print(len(list))
+
+
+# x = [
+#
+# y = [4, 5, 6]
+#
+# z = [7, 8, 9]
+#
+# xyz = zip(x, y, z)
+
+# print(list(xyz))

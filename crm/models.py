@@ -163,11 +163,26 @@ class Customer(models.Model):
     )
     consultant = models.ForeignKey(verbose_name="课程顾问", to='UserInfo', related_name='consultant',limit_choices_to={'depart_id':1001})
     date = models.DateField(verbose_name="咨询日期", auto_now_add=True)
+    recv_date = models.DateField(verbose_name='接客时间', null=True, blank=True)
     last_consult_date = models.DateField(verbose_name="最后跟进日期", auto_now_add=True)
 
     def __str__(self):
         return "姓名:{0},QQ:{1}".format(self.name, self.qq, )
-
+class SaleRank(models.Model):
+    user=models.ForeignKey(verbose_name='销售顾问',to='UserInfo',limit_choices_to={'depart_id':10001})
+    num=models.IntegerField(verbose_name='数量')
+    weight=models.IntegerField(verbose_name='权重')
+class CustomerDistribution(models.Model):
+    user=models.ForeignKey(verbose_name='课程顾问',to='UserInfo',limit_choices_to={'depart_id':10001})
+    customer=models.ForeignKey(verbose_name='咨询客户',to='Customer',)
+    ctime=models.DateField()
+    status_choices=(
+        (1,'正在跟进'),
+        (2,'已成单'),
+        (3,'超过3天未跟进'),
+        (4,'超过5天未成单'),
+    )
+    status=models.IntegerField(choices=status_choices,verbose_name='状态',default=1)
 
 class ConsultRecord(models.Model):
     """

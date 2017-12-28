@@ -173,6 +173,8 @@ class ChangeList(object):
             temp = []
             for field_name in self.list_display:
                 if isinstance(field_name, str):
+                    # print('row',row,type(row))
+                    # print('field_name',field_name,type(row))
                     val = getattr(row, field_name)
                     if field_name in self.edit_display:
                         val = self.get_edit_tag(row.pk, val)
@@ -360,6 +362,11 @@ class StarkConfig(object):
         if self.comb_filter:
             result.extend(self.comb_filter)
         return result
+    order_by=[]
+    def get_order_by(self):
+        result=[]
+        result.extend(self.order_by)
+        return result
 
     def wrap(self, view_func):
         def inner(request, *args, **kwargs):
@@ -407,7 +414,7 @@ class StarkConfig(object):
             if flag:
                 comb_condition['%s__in' % key] = value_list
         print("************************")
-        queryset = self.model_class.objects.filter(self.get_search_form_condition()).filter(**comb_condition).distinct()
+        queryset = self.model_class.objects.filter(self.get_search_form_condition()).filter(**comb_condition).distinct().order_by(*self.get_order_by())
         print('queryset', queryset)
         cl = ChangeList(self, queryset)
         print(cl.body_list)
