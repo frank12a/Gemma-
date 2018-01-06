@@ -4,23 +4,42 @@ from stark.service import v1
 import json
 from django.db.models import Q
 from  utils import message
-
+from xxxxxx import XXX
 from django.utils.safestring import mark_safe
 from django.shortcuts import HttpResponse, redirect, render
 from django.utils.safestring import mark_safe
 from django.urls import reverse
-# from crm.config.student1  import Studentconfig
-# from crm.config.customer  import CustomerConfig
+
 import datetime
 
 from django.forms import ModelForm
 
-
+class BasePermission(object):
+    def get_show_add_btn(self):
+        code_list=self.request.permission_codes_list
+        if 'add' in code_list:
+            return  True
+    def get_edit_display(self):
+        code_list = self.request.permission_codes_list
+        if 'edit' in code_list:
+            return  super(SchoolConfig,self).get_edit_display()
+        else:
+           return []
+    def get_list_display(self):
+        code_list=self.request.permission_codes_list
+        data = []
+        if self.list_display:
+            data.extend(self.list_display)
+            # data.append(v1.StarkConfig.edit)
+            if 'del' in code_list:
+              data.append(v1.StarkConfig.delete)
+            data.insert(0, v1.StarkConfig.checkbox)
+        return data
 class SingleModelForm(ModelForm):
     class Meta:
         model = models.Customer
         exclude = ['last_consult_date', 'recv_date', 'status', 'consultant',]
-class DepartmentConfig(v1.StarkConfig):
+class DepartmentConfig(BasePermission,v1.StarkConfig):
     '''
     这是部门表实现了：显示字段、搜索、actions
     '''
@@ -40,7 +59,7 @@ class DepartmentConfig(v1.StarkConfig):
 v1.site.register(models.Department, DepartmentConfig)
 
 
-class UserinfoConfig(v1.StarkConfig):
+class UserinfoConfig(BasePermission,v1.StarkConfig):
     '''
 
     这是用户：我们实现了：显示、搜索、组合搜索（有bug）
@@ -81,7 +100,7 @@ class CourseConfig(v1.StarkConfig):
 v1.site.register(models.Course, CourseConfig)
 
 
-class SchoolConfig(v1.StarkConfig):
+class SchoolConfig(BasePermission,v1.StarkConfig):
     '''
      校区：实现了：显示字段、搜索
     '''
@@ -96,7 +115,9 @@ class SchoolConfig(v1.StarkConfig):
         result.append(v1.StarkConfig.delete)
         result.insert(0, v1.StarkConfig.checkbox)
         return result
-
+# comb_filter = [
+#         v1.FilterOption('depart', text_func_name=lambda x: str(x), val_func_name=lambda x: x.code),
+#     ]
 
 v1.site.register(models.School, SchoolConfig)
 
@@ -150,6 +171,7 @@ class CustomerConfig(v1.StarkConfig):
             url(r'^(\d+)/competion/$', self.wrap(self.competion), name='%s/%s/competion' % app_model_name),
             url(r'^sale_views/$', self.wrap(self.sale_views), name='%s/%s/sale_views' % app_model_name),
             url(r'^single/$', self.wrap(self.single), name='%s/%s/single' % app_model_name),
+            url(r'^multi/$', self.wrap(self.multi), name='%s/%s/multi' % app_model_name),
         ]
         return urls
     def public(self,request):
@@ -201,7 +223,7 @@ class CustomerConfig(v1.StarkConfig):
            form=SingleModelForm()
            return render(request,'single_form.html',{'form':form})
        else:
-         from xxxxxx import XXX
+
          form=SingleModelForm(request.POST)
          if form.is_valid():
              sale_id = XXX.get_sale_id()
@@ -212,18 +234,18 @@ class CustomerConfig(v1.StarkConfig):
              try:
                 with transaction.atomic():
                      #方法一
-                     form.instance.consultant_id = sale_id
-                     form.instance.recv_date = ctime
-                     form.instance.last_consult_date = ctime
-                     obj = form.save()
+                     # form.instance.consultant_id = sale_id
+                     # form.instance.recv_date = ctime
+                     # form.instance.last_consult_date = ctime
+                     # obj = form.save()
                      #方法二
-                     # form.cleaned_data['consultant_id'] = sale_id
-                     # form.cleaned_data['recv_date']= ctime
-                     # form.cleaned_data['last_consult_date']= ctime
-                     # course_list=form.cleaned_data.pop('course')
-                     # print(course_list)
-                     # obj=models.Customer.objects.create(**form.cleaned_data)
-                     # obj.course.add(*course_list)
+                     form.cleaned_data['consultant_id'] = sale_id
+                     form.cleaned_data['recv_date']= ctime
+                     form.cleaned_data['last_consult_date']= ctime
+                     course_list=form.cleaned_data.pop('course')
+                     print('course_list',course_list)
+                     obj=models.Customer.objects.create(**form.cleaned_data)
+                     obj.course.add(*course_list)
                      models.CustomerDistribution.objects.create(user_id=sale_id,customer=obj,ctime=ctime)
                      #发短信
              except Exception as e:
@@ -232,7 +254,90 @@ class CustomerConfig(v1.StarkConfig):
              return HttpResponse('保存成功')
          else:
              return render(request, 'single_form.html', {'form': form})
-    # search_fields = ['qq__contains','name__contains','title__contains','title__contains','title__contains','title__contains','title__contains']
+    def multi(self,request):
+        if request.method=='GET':
+            return  render(request,'multi_view.html')
+        else:
+            ctime = datetime.datetime.now().date()
+            from django.db import transaction
+            from  io import  BytesIO
+            file_obj=request.FILES.get('exfile')
+            f=BytesIO()
+            for chunk in file_obj:
+                f.write(chunk)
+            import xlrd
+            work_hold = xlrd.open_workbook(file_contents=f.getvalue())
+            sheet=work_hold.sheet_by_index(0)
+            maps = {
+                0: 'qq',
+                1: 'name',
+                2: 'gender',
+                3: 'education',
+                4: 'graduation_school',
+                5: 'major',
+                6: 'experience',
+                7: 'work_status',
+                8: 'course',
+            }
+            print('sheet.nrows',sheet.nrows)
+            for index in range(1,sheet.nrows):# 这个是获取的行数
+                sale_id = XXX.get_sale_id()
+                if not sale_id:
+                    return HttpResponse("没有客户顾问无法分配")
+                row=sheet.row(index)  # 这是通过行数获取行的内容
+                dict_obj={} # 字典
+                for i in range(len(maps)):     # 这是获取列的数量
+                    key=maps[i]        # 这是键
+                    cell=row[i]   # 这是获取空格的对象
+                    dict_obj[key]=cell.value
+                try:
+                    with transaction.atomic():
+                        dict_obj['consultant_id']=int(sale_id.decode('utf-8'))
+                        course_list=[]
+                        course_list.extend(dict_obj.pop('course').split(','))
+                        obj=models.Customer.objects.create(**dict_obj)
+                        obj.course=course_list
+                        models.CustomerDistribution.objects.create(user_id=sale_id, customer=obj, ctime=ctime)
+                except Exception as e:
+                    print(e)
+                    XXX.rollback(sale_id)
+                message.send_message('自动发送', '很，兴奋代码自动发送邮件，', '2981405421@qq.com', '大毛')
+            return HttpResponse('保存成功')
+
+
+
+
+            # file_obj=request.FILES.get('exfile')
+            # with open('xxxx.xlsx','wb') as f:
+            #     for chunk in file_obj:
+            #         f.write(chunk)
+            # import  xlrd
+            # work_hold=xlrd.open_workbook('xxxx.xlsx')
+            # sheet=work_hold.sheet_by_index(0)
+            # maps={
+            #     0:'学校',
+            #     1:'日期',
+            # }
+            # for index  in range(1,sheet.nrows):# 这个是获取的行数
+            #     row=sheet.row(index)  # 这是通过行数获取行的内容
+            #     dict_obj={} # 字典
+            #     for i in range(len(maps)):     # 这是获取列的数量
+            #         key=maps[i]        # 这是键
+            #         cell=row[i]   # 这是获取空格的对象
+            #         dict_obj[key]=cell.value
+            #     print(dict_obj)      # 这是获取对象
+            # print(work_hold,type(work_hold))
+            # print(file_obj.field_name)#这是对象名字
+            # print(file_obj.size)#这是对象名字
+            # print(file_obj.name)#这是对象名字
+            # print('上传对象',file_obj,type(file_obj))
+            # return  HttpResponse('上传成功')
+
+
+
+
+
+
     def get_gendr(self, obj=None, is_header=None):
         if is_header:
             return '性别'
@@ -294,15 +399,15 @@ class CustomerConfig(v1.StarkConfig):
                      'company__contains', 'salary__contains', 'consultant__contains', 'date__contains',
                      'last_consult_date__contains', ]  #
 
-    comb_filter = [
-        # v1.FilterOption('gender', is_choice=True),
-        # v1.FilterOption('education', is_choice=True),
-        # # v1.FilterOption('experience', is_choice=True),
-        # # v1.FilterOption('work_status', is_choice=True),
+    comb_filter = [ #组合搜索 一个是choice一是多选，和多对一
+        v1.FilterOption('gender', is_choice=True),
+        v1.FilterOption('education', multi=True,is_choice=True),
+        # v1.FilterOption('experience', is_choice=True),
+        # v1.FilterOption('work_status', is_choice=True),
         # # v1.FilterOption('source', is_choice=True),
         # # v1.FilterOption('course', True),
         # v1.FilterOption('status', is_choice=True),
-        # v1.FilterOption('consultant', ),
+        v1.FilterOption('consultant', ),
     ]
     order_by = ['-status']
 
@@ -509,3 +614,13 @@ class Studentconfig(v1.StarkConfig):
 
 
 v1.site.register(models.Student, Studentconfig)
+class CustomerDistributionConfig(v1.StarkConfig):
+
+    def get_status(self,obj=None,is_header=None):
+        if is_header:
+            return  '状态'
+        return  obj.get_status_display()
+
+    list_display = ['user', 'customer', 'ctime', get_status]
+v1.site.register(models.CustomerDistribution,CustomerDistributionConfig)
+

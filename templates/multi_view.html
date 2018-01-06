@@ -1,0 +1,17 @@
+{% extends 'stark/layout.html' %}
+{% load staticfiles %}
+{% block css %}
+    <script src="{% static 'jquery-1.12.4.min.js' %}"></script>
+    <script src="{% static 'highcharts.js' %}"></script>
+{% endblock %}
+{% block content %}
+    <span><h2>批量录入</h2></span>
+{#    <a href="/static/模板.xlsx">模板下载</a>#}
+    <a href="/xiazai">模板下载</a>
+    <form action="" method="post"  enctype="multipart/form-data" novalidate>
+    {% csrf_token %}
+        <input type="file" name="exfile">
+        <input type="submit" value="提交">
+
+    </form>
+{% endblock %}

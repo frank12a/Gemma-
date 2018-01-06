@@ -14,7 +14,7 @@ def form(config,model_form_obj):
         from django.db.models.query import QuerySet
         from django.forms.models import ModelChoiceField
         if isinstance(bfield.field, ModelChoiceField):
-            related_class_name = bfield.field.queryset.model
+            related_class_name = bfield.field.queryset.model#
             if related_class_name in site._registy:
                 app_model_name = related_class_name._meta.app_label, related_class_name._meta.model_name
                 # FK，One,M2M： 当前字段所在的类名和related_name

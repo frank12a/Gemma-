@@ -1,0 +1,40 @@
+ .header {
+            background-color: #adadad;
+            height: 48px;
+            padding:3px 10px;
+     border: 1px;
+     color:white;
+        }
+ .c1 {
+
+     top: 48px;
+     position: absolute;
+     left: 0;
+     width: 230px;
+     bottom:0px;
+     background-color: #8a6d3b;
+
+
+ }
+
+ .c2 {
+     position: absolute;
+     left: 231px;
+     bottom: 0px;
+     /*background-color: #2aabd2;*/
+     top:48px;
+     right: 0px;
+     overflow: auto;
+
+
+ }
+
+ .hide{
+    display: none;
+}
+ .item-permission a.active{
+    color: red;
+}
+ .item-permission{
+    padding: 3px 10px;
+}

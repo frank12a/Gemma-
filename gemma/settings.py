@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'app04.apps.App04Config',
     'crm.apps.CrmConfig',
     'stark.apps.StarkConfig',
+    'rbac.apps.RbacConfig',
 ]
 
 MIDDLEWARE = [
@@ -52,6 +53,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # 'rbac.middle.middle.LoginMixin',
+    # 'rbac.middle.middle.middleMixin',
 ]
 
 ROOT_URLCONF = 'gemma.urls'
@@ -125,7 +128,7 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATICFILES_DIRS=[
-    os.path.join(BASE_DIR,'static')
+    os.path.join(BASE_DIR,'static'),
 ]
 #自定义数据
 MESSAGE_CLASSES=[
@@ -134,4 +137,13 @@ MESSAGE_CLASSES=[
     'utils.message.msg.Msg',
     'utils.message.wechat.Wechat',
 ]
+#####################权限中间键############
+VLAID=[
+    "/login/",
+    "/index/",
 
+]
+
+"===================="
+PRIMANRY_LIST="asdg"
+PRIMSSION_MEN_DIC="wwwerr"

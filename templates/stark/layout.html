@@ -1,0 +1,46 @@
+{% load rbac %}
+{% load staticfiles %}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/static/rabc.css">
+    <link rel="stylesheet" href="{% static 'bootstrap/css/bootstrap.css' %}">
+    {% block css %}{% endblock %}
+    <title>Title</title>
+    <title>Title</title>
+
+</head>
+<body>
+    <div class="header">
+        {% block header %}
+            <h>欢迎回来</h>
+        {% endblock header %}
+    </div>
+    <div>
+    <div class="c1" >
+            {% block menu %}
+                {% menu_html request %}
+            {% endblock %}
+
+    </div>
+    <div class="c2" >
+        {% block content %}
+
+        {% endblock %}
+    </div>
+    </div>
+
+
+
+</body>
+<script src="/static/jquery-1.12.4.min.js"></script>
+<script src="/static/rabc.js"></script>
+
+{% block js %}
+{% endblock %}
+
+</html>

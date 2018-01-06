@@ -20,8 +20,8 @@ class FilterOption(object):
         self.multi = multi  # 是否可以多选
         self.condition = condition  # 筛选的条件
         self.is_choice = is_choice  # 这个是不是choice
-        self.text_func_name = text_func_name  # 这是
-        self.val_func_name = val_func_name
+        self.text_func_name = text_func_name  #页面上生成文本的函数
+        self.val_func_name = val_func_name    #生成a标签值的函数
 
     def get_queryset(self, _field):  # 这个是前面配置的筛选条件
         if self.condition:
@@ -38,8 +38,8 @@ class FilterRow(object):
     """
 
     def __init__(self, option, data, request):
-        self.data = data  # 这个是筛选条件的数据
         self.option = option  # 这个option是FilterOption的对象
+        self.data = data  # 这个是筛选条件的数据
         self.request = request  # 这个就是请求数据
 
     def __iter__(self):
@@ -56,7 +56,7 @@ class FilterRow(object):
             print('origin_list', origin_list)
             url = '{0}?{1}'.format(self.request.path_info, params.urlencode())  # 这个使用format格式
             yield mark_safe('<a href="{}">全部</a>'.format(url))  # 用迭代器返回
-            params.setlist(self.option.field_name, origin_list)  # 两个结合在一起的
+            params.setlist(self.option.field_name, origin_list)  # 两个结合在一起的相当于extend
         else:
             url = '{0}?{1}'.format(self.request.path_info, params.urlencode())  # 前面跟的是地址，后面跟的是条件
             yield mark_safe('<a class="active" href="{}">全部</a>'.format(url))  # 如果没有这行的数据，那么全部就变亮
@@ -122,17 +122,17 @@ class ChangeList(object):
         page_obj = Pagination(current_page, total_count, self.request.path_info, self.request.GET, )  # 这是关于页面处理的插件
         self.page_obj = page_obj  # 这是关于页面的所有函数
 
-        self.data_list = queryset[page_obj.start:page_obj.end]  # 关于页面的起止页
+        self.data_list = queryset[page_obj.start:page_obj.end]  # 关于页面的起止行
 
         # #这是不一样的代码
-        self.show_add_btn = config.get_show_add_btn()  # 这是是否要显示增加按钮
+        # self.show_add_btn = config.get_show_add_btn()  # 这是是否要显示增加按钮
         self.add_url = config.get_add_url()  # 这是增加按钮的url
 
     def gen_comb_filter(self):
         from django.db.models import ForeignKey, ManyToManyField
         for option in self.comb_filter:  # option是个FilterOption对象
             _field_name = self.model_class._meta.get_field(option.field_name)  # 找到的是的表的字段
-            print('_field_name', _field_name)
+            print('_field_name',_field_name )
             if isinstance(_field_name, ForeignKey):
                 temp = FilterRow(option, option.get_queryset(_field_name), self.request)
             elif isinstance(_field_name, ManyToManyField):
@@ -173,18 +173,16 @@ class ChangeList(object):
             temp = []
             for field_name in self.list_display:
                 if isinstance(field_name, str):
-                    # print('row',row,type(row))
-                    # print('field_name',field_name,type(row))
                     val = getattr(row, field_name)
                     if field_name in self.edit_display:
                         val = self.get_edit_tag(row.pk, val)
                 else:
-                    val = field_name(self, row)
+                    val = field_name(self, row)#这里传入的参数self
                 temp.append(val)
             new_data_list.append(temp)
         return new_data_list
 
-    def get_edit_tag(self, pk, text):
+    def get_edit_tag(self, pk, text):#这是处理edit__link的函数
         query_str = self.request.GET.urlencode()
         params = QueryDict(mutable=True)
         params[self.config._query_param_key] = query_str
@@ -202,7 +200,7 @@ class StarkConfig(object):
         self.model_class = model_class
         self.site = site
         self.request = None
-        self._query_param_key = '_listfilter'  # 这是固定的值
+        self._query_param_key = '_listfilter'  # 这是固定的值，搜索条件的自己订的k值
         self.search_key = 'q'
 
     def checkbox(self, obj=None, is_header=False):
@@ -213,9 +211,9 @@ class StarkConfig(object):
     def edit(self, obj=None, is_header=False):
         if is_header:
             return '编辑'
-        query_str = self.request.GET.urlencode()  # 如果有后面有条件就走下面的方法
+        query_str = self.request.GET.urlencode()  # 如果有后面有条件就走下面的方法,这个是保留搜索条件
         if query_str:
-            params = QueryDict(mutable=True)
+            params = QueryDict(mutable=True)#这个是可以修改的
             params[self._query_param_key] = query_str
             return mark_safe("<a href='%s?%s'>编辑</a>" % (self.get_change_url(obj.id), params.urlencode(),))
         return mark_safe("<a href='%s'>编辑</a>" % (self.get_change_url(obj.id)))
@@ -223,7 +221,7 @@ class StarkConfig(object):
     def delete(self, obj=None, is_header=False):
         if is_header:
             return '删除'
-        query_str = self.request.GET.urlencode()
+        query_str = self.request.GET.urlencode()#获取后面的删除条件
         if query_str:
             params = QueryDict(mutable=True)  # 这是修改这种数据格式
             params[self._query_param_key] = query_str
@@ -231,19 +229,19 @@ class StarkConfig(object):
         return mark_safe("<a href='%s'>删除</a>" % (self.get_delete_url(obj.id)))
 
     # 这是显示的字段
-    list_display = []
+    list_display = []#默认是空的
 
     def get_list_display(self):
         data = []
         if self.list_display:
             data.extend(self.list_display)
-            data.append(StarkConfig.edit)
-            data.append(StarkConfig.delete)
+            data.append(StarkConfig.edit)#
+            data.append(StarkConfig.delete)#加的是函数所以要把self传入
             data.insert(0, StarkConfig.checkbox)
         return data
         # 这是编辑的字段
 
-    edit_display = []
+    edit_display = []#默认是空的
 
     def get_edit_display(self):
         result = []
@@ -260,10 +258,10 @@ class StarkConfig(object):
 
     model_form_class = None
 
-    def get_model_form_class(self):
+    def get_model_form_class(self):#这是干嘛的
         if self.model_form_class:
             return self.model_form_class
-        from django.forms import ModelForm
+        from django.forms import ModelForm  #可以自动添加多对多，和多对一不用自己处理
         # class TestModelForm(ModelForm):
         #     class Meta:
         #         model = self.model_class
@@ -299,7 +297,7 @@ class StarkConfig(object):
     # 是否要显示搜索按钮
     show_search_form = True
 
-    def get_show_search_form(self):
+    def get_show_search_form(self):#这是搜索按钮的
         return self.show_search_form
 
     # 这是删除url的反向解析
@@ -314,14 +312,14 @@ class StarkConfig(object):
         return add_url
 
     def get_search_form_condition(self):
-            key_word = self.request.GET.get(self.search_key)
-            search_fields = self.get_search_fields()
-            condition = Q()
-            condition.connector = 'or'
-            if key_word and self.get_show_search_form:
-                for field_name in search_fields:
+            key_word = self.request.GET.get(self.search_key)#获取前端传来的条件关键字
+            search_fields = self.get_search_fields()#获取搜搜的关键字
+            condition = Q()#使用Q查询
+            condition.connector = 'or'#用or连接
+            if key_word and self.get_show_search_form:#如果有搜索的关键字和显示了搜索按钮
+                for field_name in search_fields:#这是用所有的搜索东西
                     condition.children.append((field_name, key_word))
-            return condition
+            return condition#返回搜搜条件
 
     # 编辑页面的路由系统的反射
     def get_change_url(self, nid):
@@ -348,9 +346,9 @@ class StarkConfig(object):
         return list_url
         # 需要页面显示的字段
 
-    show_combe_fileter = True
+    show_combe_fileter = True#是否显示组合搜索
 
-    def get_show_combe_fileter(self):
+    def get_show_combe_fileter(self):#这是显示组合搜索的
         if self.show_combe_fileter:
             return self.show_combe_fileter
 
@@ -362,12 +360,13 @@ class StarkConfig(object):
         if self.comb_filter:
             result.extend(self.comb_filter)
         return result
+    #排序用的
     order_by=[]
     def get_order_by(self):
         result=[]
         result.extend(self.order_by)
         return result
-
+    #加装饰器
     def wrap(self, view_func):
         def inner(request, *args, **kwargs):
             self.request = request
@@ -386,26 +385,26 @@ class StarkConfig(object):
         ]
         urlpatterns.extend(self.extra_url())  # 对URL的扩展
         return urlpatterns
-
+    #钩子函数用来扩展url的
     def extra_url(self):
         return []
 
     # 展示页面
     def changelist(self, request, *args, **kwargs):
-        if request.method == "POST" and self.get_show_actions():
+        if request.method == "POST" and self.get_show_actions():#如有有action显示
             func_name_str = request.POST.get("list_actions")
             print('PK', request.POST.get('pk'))
-            actions_func = getattr(self, func_name_str)
+            actions_func = getattr(self, func_name_str)#这个需要给我解释下
             ret = actions_func(request)
             if ret:
                 return ret
         comb_condition = {}
         print('组合搜索条件', request.GET)
-        option_list = self.get_comb_filter()
+        option_list = self.get_comb_filter()#这是所有的组合搜索条件
         print(option_list)
-        print(request.GET.keys())
+        print(request.GET.keys())#所有的搜索条件的字段
         for key in request.GET.keys():
-            value_list = request.GET.getlist(key)
+            value_list = request.GET.getlist(key)#这是前端传来的所有搜索条件的id
             flag = False
             for option in option_list:
                 if option.field_name == key:
@@ -413,8 +412,9 @@ class StarkConfig(object):
                     break
             if flag:
                 comb_condition['%s__in' % key] = value_list
+                print('comb_condition',comb_condition)#comb_condition {'education__in': ['2'], 'gender__in': ['1']}
         print("************************")
-        queryset = self.model_class.objects.filter(self.get_search_form_condition()).filter(**comb_condition).distinct().order_by(*self.get_order_by())
+        queryset = self.model_class.objects.filter(self.get_search_form_condition()).filter(**comb_condition).order_by(*self.get_order_by()).distinct()
         print('queryset', queryset)
         cl = ChangeList(self, queryset)
         print(cl.body_list)
@@ -515,7 +515,7 @@ class StarkSite(object):
     def register(self, model_class, stark_config_class=None):
         if not stark_config_class:
             stark_config_class = StarkConfig
-        self._registy[model_class] = stark_config_class(model_class, self)
+        self._registy[model_class] = stark_config_class(model_class, self)#self就是site
 
     def get_urls(self):
         urlpatterns = []

@@ -1,5 +1,5 @@
 from django.db import models
-
+from rbac import models as rbac_model
 class Department(models.Model):
     """
     部门表
@@ -17,7 +17,7 @@ class UserInfo(models.Model):
     """
     员工表
     """
-    # auth = models.OneToOneField(verbose_name='用户权限', to=rbac_model.User)
+    auth = models.OneToOneField(verbose_name='用户权限', to=rbac_model.Userinfo,null=True,blank=True)
     name = models.CharField(verbose_name='员工姓名', max_length=16)
     username = models.CharField(verbose_name='用户名', max_length=32)
     password = models.CharField(verbose_name='密码', max_length=64)
@@ -167,7 +167,8 @@ class Customer(models.Model):
     last_consult_date = models.DateField(verbose_name="最后跟进日期", auto_now_add=True)
 
     def __str__(self):
-        return "姓名:{0},QQ:{1}".format(self.name, self.qq, )
+        return  self.name
+        # return "姓名:{0},QQ:{1}".format(self.name, self.qq, )
 class SaleRank(models.Model):
     user=models.ForeignKey(verbose_name='销售顾问',to='UserInfo',limit_choices_to={'depart_id':10001})
     num=models.IntegerField(verbose_name='数量')
@@ -180,7 +181,7 @@ class CustomerDistribution(models.Model):
         (1,'正在跟进'),
         (2,'已成单'),
         (3,'超过3天未跟进'),
-        (4,'超过5天未成单'),
+        (4,'超过15天未成单'),
     )
     status=models.IntegerField(choices=status_choices,verbose_name='状态',default=1)
 
